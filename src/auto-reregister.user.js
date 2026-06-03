@@ -164,23 +164,43 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
 
   // Auto-dismiss any reward/congrats/popup modals
   async function dismissModals() {
+    log('[dismissModals] start — scanning page for modals...');
     for (let round = 0; round < 8; round++) {
+      // Log all visible buttons for debugging
+      const allBtns = [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null);
+      log(`[dismissModals] round ${round}, visible buttons:`, allBtns.map(b => `"${b.textContent?.trim()}" disabled=${b.disabled}`));
+
+      // Log all visible img with alt containing "close"
+      const closeImgs = [...document.querySelectorAll('img')].filter(i => i.alt?.toLowerCase().includes('close') && i.offsetParent !== null);
+      log(`[dismissModals] close images found:`, closeImgs.length, closeImgs.map(i => ({ alt: i.alt, src: i.src?.slice(-30) })));
+
       // Try text-based buttons first
       const btn = findBtn(['continue earning', 'cash out', 'continue', 'got it', 'ok', 'close', 'claim']);
       if (btn) {
-        log('Dismissing modal:', btn.textContent.trim());
+        log('[dismissModals] clicking button:', btn.textContent.trim());
         btn.click();
         await sleep(1200);
         continue;
       }
-      // Also look for close icon buttons (img alt="close" or aria-label="Close")
-      const closeIcon = document.querySelector('button[aria-label="Close"], button[aria-label="close"], img[alt="close"]');
-      if (closeIcon) {
-        log('Dismissing modal via close icon');
-        closeIcon.click();
+
+      // Look for close icon: <button> wrapping or <img> itself
+      const closeBtn = document.querySelector('button[aria-label="Close"], button[aria-label="close"]');
+      if (closeBtn && closeBtn.offsetParent !== null) {
+        log('[dismissModals] clicking close button (aria-label)');
+        closeBtn.click();
         await sleep(1000);
         continue;
       }
+
+      // img[alt="close"] — might be clickable directly (not inside a <button>)
+      if (closeImgs.length > 0) {
+        log('[dismissModals] clicking close img directly');
+        closeImgs[0].click();
+        await sleep(1000);
+        continue;
+      }
+
+      log('[dismissModals] no modal elements found, done');
       break;
     }
   }
