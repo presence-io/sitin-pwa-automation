@@ -659,27 +659,18 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       }
 
       // Step B: Wait for PayPal email input to appear (BindPaypalModal)
+      // IMPORTANT: exclude inputs inside #autobot-panel to avoid matching our own config input
       log('[PayPal] Waiting for email input...');
       let emailInput = null;
       for (let i = 0; i < 10; i++) {
-        // Try multiple selectors
-        emailInput = document.querySelector('input[type="email"]')
-          || document.querySelector('input[placeholder*="PayPal"]')
-          || document.querySelector('input[placeholder*="email"]');
-
-        // Also dump all visible inputs for debugging
-        const allInputs = [...document.querySelectorAll('input')].filter(i => i.offsetParent !== null);
-        log(`[PayPal] round ${i}, visible inputs:`, allInputs.map(inp => ({
-          type: inp.type,
+        const candidates = [...document.querySelectorAll('input[type="email"]')]
+          .filter(inp => !inp.closest('#autobot-panel') && inp.offsetParent !== null);
+        log(`[PayPal] round ${i}, email inputs (excl panel):`, candidates.map(inp => ({
           placeholder: inp.placeholder,
-          name: inp.name,
-          id: inp.id,
           value: inp.value,
-          className: inp.className?.slice(0, 50),
         })));
-
-        if (emailInput) {
-          log('[PayPal] Found email input:', { type: emailInput.type, placeholder: emailInput.placeholder });
+        if (candidates.length > 0) {
+          emailInput = candidates[0];
           break;
         }
         await sleep(800);
