@@ -662,23 +662,47 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       log('[PayPal] Waiting for email input...');
       let emailInput = null;
       for (let i = 0; i < 10; i++) {
-        emailInput = document.querySelector('input[type="email"], input[placeholder*="email"], input[placeholder*="PayPal"]');
-        if (emailInput) break;
+        // Try multiple selectors
+        emailInput = document.querySelector('input[type="email"]')
+          || document.querySelector('input[placeholder*="PayPal"]')
+          || document.querySelector('input[placeholder*="email"]');
+
+        // Also dump all visible inputs for debugging
+        const allInputs = [...document.querySelectorAll('input')].filter(i => i.offsetParent !== null);
+        log(`[PayPal] round ${i}, visible inputs:`, allInputs.map(inp => ({
+          type: inp.type,
+          placeholder: inp.placeholder,
+          name: inp.name,
+          id: inp.id,
+          value: inp.value,
+          className: inp.className?.slice(0, 50),
+        })));
+
+        if (emailInput) {
+          log('[PayPal] Found email input:', { type: emailInput.type, placeholder: emailInput.placeholder });
+          break;
+        }
         await sleep(800);
-        log('[PayPal] Waiting for email input...', i);
       }
 
       if (emailInput) {
+        log('[PayPal] About to type into email input, current value:', emailInput.value);
         await typeIntoInput(emailInput, CONFIG.paypalEmail);
-        log('[PayPal] Filled email:', CONFIG.paypalEmail);
+        log('[PayPal] After typing, input value:', emailInput.value);
         await sleep(500);
+
+        // Dump all visible buttons to find the right submit one
+        const allBtns = [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null);
+        log('[PayPal] visible buttons:', allBtns.map(b => `"${b.textContent?.trim()}" disabled=${b.disabled}`));
 
         // Click submit/bind button
         const submitBtn = findBtn(['next', 'submit', 'bind', 'confirm', 'save', 'done']);
         if (submitBtn) {
-          log('[PayPal] Clicking:', submitBtn.textContent.trim());
+          log('[PayPal] Clicking submit:', submitBtn.textContent.trim());
           submitBtn.click();
           await sleep(3000);
+        } else {
+          warn('[PayPal] No submit button found!');
         }
         updateStatus('paypal', 'done', 'PayPal 绑定完成 ✓');
       } else {
