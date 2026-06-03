@@ -25,7 +25,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   const CONFIG = {
     username: '',          // 留空自动生成
     age: 22,
-    paypalEmail: '',      // PayPal 邮箱
+    paypalEmail: 'autobot_test@gmail.com',
     photoUrl: 'https://file.archat.us/cai/user_custom_avatar/2100048298/e41dd7af-75e5-43c4-a88f-d3521824879e.jpg',
   };
 
@@ -599,7 +599,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   }
 
   // ═══════════════════════════════════════════════
-  // Step 4: Bind PayPal
+  // Step 4: Bind PayPal (+ handle cashout reminder modal)
   // ═══════════════════════════════════════════════
   async function stepBindPaypal() {
     updateStatus('paypal', 'running', '正在绑定 PayPal...');
@@ -610,31 +610,63 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     }
 
     try {
-      if (!location.pathname.includes('/cashout')) {
-        spaNavigate('/cashout');
-        await sleep(2000);
-      }
+      // After onboarding, Stage 1 cashout reminder modal may be showing
+      // It has a "Cash out" button — clicking it starts the cashout flow
+      // which then shows BindPaypalModal if no PayPal is bound.
+      // So: click "Cash out" on the reminder → fill PayPal email in bind modal → done
 
-      // Find PayPal card and click
+      // Step A: If cashout reminder modal is visible, click "Cash out" to proceed
       await sleep(1000);
-      const paypalImgs = document.querySelectorAll('img[src*="paypal"]');
-      if (paypalImgs.length > 0) {
-        const card = paypalImgs[0].closest('button, div[role="button"], div[class*="card"]');
-        if (card) { card.click(); await sleep(2000); }
+      let cashoutBtn = findBtn(['cash out']);
+      if (cashoutBtn) {
+        log('[PayPal] Cashout reminder modal detected, clicking Cash out to trigger bind flow');
+        cashoutBtn.click();
+        await sleep(2000);
+      } else {
+        // No modal — navigate to cashout page manually
+        log('[PayPal] No cashout modal, navigating to /cashout');
+        if (!location.pathname.includes('/cashout')) {
+          spaNavigate('/cashout');
+          await sleep(2000);
+        }
+        // Find and click PayPal payment card
+        await sleep(1000);
+        const paypalImgs = document.querySelectorAll('img[src*="paypal"]');
+        if (paypalImgs.length > 0) {
+          const card = paypalImgs[0].closest('button, div[role="button"], div[class*="card"]');
+          if (card) { card.click(); await sleep(2000); }
+        }
       }
 
-      // Fill email in modal
-      await sleep(500);
-      const emailInput = document.querySelector('input[type="email"], input[placeholder*="email"], input[placeholder*="PayPal"]');
+      // Step B: Wait for PayPal email input to appear (BindPaypalModal)
+      log('[PayPal] Waiting for email input...');
+      let emailInput = null;
+      for (let i = 0; i < 10; i++) {
+        emailInput = document.querySelector('input[type="email"], input[placeholder*="email"], input[placeholder*="PayPal"]');
+        if (emailInput) break;
+        await sleep(800);
+        log('[PayPal] Waiting for email input...', i);
+      }
+
       if (emailInput) {
         emailInput.focus();
         setNativeValue(emailInput, CONFIG.paypalEmail);
-        await sleep(300);
-        const btn = findBtn(['submit', 'bind', 'confirm', 'save', 'done']);
-        if (btn) { btn.click(); await sleep(2000); }
+        log('[PayPal] Filled email:', CONFIG.paypalEmail);
+        await sleep(500);
+
+        // Click submit/bind button
+        const submitBtn = findBtn(['submit', 'bind', 'confirm', 'save', 'done']);
+        if (submitBtn) {
+          log('[PayPal] Clicking:', submitBtn.textContent.trim());
+          submitBtn.click();
+          await sleep(3000);
+        }
+        updateStatus('paypal', 'done', 'PayPal 绑定完成 ✓');
+      } else {
+        warn('[PayPal] Email input not found — maybe already bound?');
+        updateStatus('paypal', 'warning', '未找到邮箱输入框，可能已绑定');
       }
 
-      updateStatus('paypal', 'done', 'PayPal 绑定已执行 ✓');
       return true;
     } catch (e) {
       updateStatus('paypal', 'error', `绑定失败: ${e.message}`);
