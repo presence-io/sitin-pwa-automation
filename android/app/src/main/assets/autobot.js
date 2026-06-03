@@ -26,7 +26,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     username: '',          // 留空自动生成
     age: 22,
     paypalEmail: '',      // PayPal 邮箱
-    photoUrl: 'https://file.archat.us/cai/user_custom_avatar/2100048298/e41dd7af-75e5-43c4-a88f-d3521824879e.jpg',
+    photoUrl: '',         // 头像图片 URL（留空则生成随机头像）
   };
 
   // ═══════════════════════════════════════════════
