@@ -429,21 +429,53 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
 
       // ── Page 4: Phone (may appear if not logged in via verified phone) ──
       log('Onboarding step 4: phone (if visible)');
-      await sleep(500);
-      const phoneInput = document.querySelector('input[inputmode="numeric"]');
-      if (phoneInput) {
-        phoneInput.focus();
-        setNativeValue(phoneInput, '2025551234');
-        await sleep(300);
-        const btn = findBtn(['next', 'continue', 'submit', 'done']);
-        if (btn) { log('Click:', btn.textContent.trim()); btn.click(); }
-        await sleep(2000);
+      await sleep(1000);
 
-        // Phone page has a confirm dialog, auto-click "Confirm"
-        await sleep(1000);
-        const confirmBtn = findBtn(['confirm']);
-        if (confirmBtn) { log('Click confirm dialog'); confirmBtn.click(); }
-        await sleep(2000);
+      // Detect phone page by looking for the "US+1" prefix text
+      const isPhonePage = !!Array.from(document.querySelectorAll('span')).find(
+        s => s.textContent?.includes('US+1')
+      );
+
+      if (isPhonePage) {
+        log('Phone page detected');
+        // Find the phone input — it's inside a container with "US+1" label
+        const phoneInput = document.querySelector('input[inputmode="numeric"]');
+        if (phoneInput) {
+          phoneInput.focus();
+          // Type digits one by one to trigger formatUsPhone correctly
+          const digits = '2025551234';
+          for (const ch of digits) {
+            const cur = phoneInput.value || '';
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(phoneInput, cur + ch);
+            phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+            phoneInput.dispatchEvent(new Event('change', { bubbles: true }));
+            await sleep(30);
+          }
+          log('Phone filled:', phoneInput.value);
+          await sleep(500);
+
+          // Click "Next" button
+          const nextBtn = findBtn(['next']);
+          if (nextBtn) {
+            log('Click:', nextBtn.textContent.trim());
+            nextBtn.click();
+          }
+          await sleep(2000);
+
+          // Handle confirm dialog — wait for it to appear and click "Confirm"
+          for (let i = 0; i < 8; i++) {
+            await sleep(500);
+            const confirmBtn = findBtn(['confirm']);
+            if (confirmBtn) {
+              log('Click confirm dialog');
+              confirmBtn.click();
+              await sleep(1500);
+              break;
+            }
+          }
+        }
+      } else {
+        log('Phone page not visible, skipping (may have verified phone from login)');
       }
 
       // Wait for registration to complete
