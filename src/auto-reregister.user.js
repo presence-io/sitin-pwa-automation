@@ -174,7 +174,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       log(`[dismissModals] close images:`, closeImgs.length);
 
       // Build keyword list based on context
-      const keywords = ['continue earning', 'continue', 'got it', 'ok', 'close'];
+      const keywords = ['continue earning', 'got it', 'continue', 'ok', 'close'];
       if (!skipCashout) keywords.push('cash out');
 
       const btn = findBtn(keywords);
@@ -425,7 +425,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
           // Handle crop modal — find and click confirm/save/done button
           for (let i = 0; i < 5; i++) {
             await sleep(800);
-            const cropBtn = findBtn(['save', 'done', 'confirm', 'crop', 'ok']);
+            const cropBtn = findBtn(['upload', 'save', 'done', 'confirm', 'crop', 'ok']);
             if (cropBtn) {
               log('Crop modal: clicking', cropBtn.textContent.trim());
               cropBtn.click();
@@ -655,7 +655,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         await sleep(500);
 
         // Click submit/bind button
-        const submitBtn = findBtn(['submit', 'bind', 'confirm', 'save', 'done']);
+        const submitBtn = findBtn(['next', 'submit', 'bind', 'confirm', 'save', 'done']);
         if (submitBtn) {
           log('[PayPal] Clicking:', submitBtn.textContent.trim());
           submitBtn.click();
@@ -741,7 +741,8 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
           if (btn.textContent?.trim() === 'Cash Out') continue;
 
           if ((text.includes('confirm') || text.includes('continue') || text.includes('ok') ||
-               text.includes('done') || text.includes('got it') || text.includes('continue earning')) &&
+               text.includes('done') || text.includes('got it') || text.includes('continue earning') ||
+               text.includes('next')) &&
               !btn.disabled) {
             log('Modal action:', btn.textContent.trim());
             btn.click();
