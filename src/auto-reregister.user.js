@@ -477,10 +477,6 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
             updateStatus('onboarding', 'warning', '头像步骤多次重试仍未通过');
             return false;
           }
-            warn('Photo Claim button still disabled after upload');
-            updateStatus('onboarding', 'warning', '头像上传后按钮仍不可用，可能颜值校验未通过');
-            return false;
-          }
         } else {
           // No file input found, try clicking upload area to trigger it
           warn('File input not found, trying upload area click');
