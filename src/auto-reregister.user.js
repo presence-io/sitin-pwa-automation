@@ -69,6 +69,26 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     });
   }
 
+  // Type text into a React controlled input character by character
+  async function typeIntoInput(el, text) {
+    el.focus();
+    await sleep(100);
+    // Clear first
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(50);
+    // Type char by char
+    for (const ch of text) {
+      const cur = el.value || '';
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, cur + ch);
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(20);
+    }
+    log('Typed into input:', el.value);
+  }
+
   function setNativeValue(el, value) {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value);
     el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -649,8 +669,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       }
 
       if (emailInput) {
-        emailInput.focus();
-        setNativeValue(emailInput, CONFIG.paypalEmail);
+        await typeIntoInput(emailInput, CONFIG.paypalEmail);
         log('[PayPal] Filled email:', CONFIG.paypalEmail);
         await sleep(500);
 
