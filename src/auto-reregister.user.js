@@ -874,8 +874,28 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'IIFE entry po
   if (document.readyState === 'complete') {
     console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'readyState=complete, calling init() immediately');
     init();
+  } else if (document.readyState === 'interactive') {
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'readyState=interactive, using DOMContentLoaded + fallback timer');
+    if (document.body) {
+      console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'body already exists, calling init() now');
+      init();
+    } else {
+      document.addEventListener('DOMContentLoaded', init);
+      setTimeout(() => {
+        if (!document.getElementById('autobot-panel')) {
+          console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Fallback timer: forcing init()');
+          init();
+        }
+      }, 2000);
+    }
   } else {
     console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'readyState=' + document.readyState + ', waiting for load event');
     window.addEventListener('load', init);
+    setTimeout(() => {
+      if (!document.getElementById('autobot-panel')) {
+        console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Fallback timer: forcing init()');
+        init();
+      }
+    }, 3000);
   }
 })();
