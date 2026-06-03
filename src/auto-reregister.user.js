@@ -766,32 +766,71 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   }
 
   // ═══════════════════════════════════════════════
-  // Run All
+  // Run All (survives page reload via localStorage)
   // ═══════════════════════════════════════════════
-  async function runAll() {
+  const AUTOBOT_STATE_KEY = 'autobot_run_state';
+
+  const ALL_STEPS = [
+    { key: 'delete', fn: stepDeleteAccount },
+    { key: 'login', fn: stepQuickLogin },
+    { key: 'onboarding', fn: stepOnboarding },
+    { key: 'paypal', fn: stepBindPaypal },
+    { key: 'cashout', fn: stepCashout },
+  ];
+
+  function saveRunState(stepIndex) {
+    localStorage.setItem(AUTOBOT_STATE_KEY, JSON.stringify({ step: stepIndex, ts: Date.now() }));
+  }
+  function clearRunState() {
+    localStorage.removeItem(AUTOBOT_STATE_KEY);
+  }
+  function getRunState() {
+    try {
+      const raw = localStorage.getItem(AUTOBOT_STATE_KEY);
+      if (!raw) return null;
+      const state = JSON.parse(raw);
+      // Expire after 5 minutes
+      if (Date.now() - state.ts > 5 * 60 * 1000) { clearRunState(); return null; }
+      return state;
+    } catch { return null; }
+  }
+
+  async function runAll(startFrom = 0) {
     updateStatus('all', 'running', '一键执行中...');
-    panelEl.querySelector('#btn-run-all').disabled = true;
+    if (panelEl) panelEl.querySelector('#btn-run-all').disabled = true;
 
-    const steps = [
-      { key: 'delete', fn: stepDeleteAccount },
-      { key: 'login', fn: stepQuickLogin },
-      { key: 'onboarding', fn: stepOnboarding },
-      { key: 'paypal', fn: stepBindPaypal },
-      { key: 'cashout', fn: stepCashout },
-    ];
+    for (let i = startFrom; i < ALL_STEPS.length; i++) {
+      const step = ALL_STEPS[i];
+      log(`[runAll] step ${i + 1}/${ALL_STEPS.length}: ${step.key}`);
 
-    for (const step of steps) {
+      // Save state BEFORE executing — if page reloads, we resume from this step
+      saveRunState(i);
+
       const ok = await step.fn();
       if (!ok) {
         updateStatus('all', 'error', `在 [${step.key}] 停止`);
-        panelEl.querySelector('#btn-run-all').disabled = false;
+        clearRunState();
+        if (panelEl) panelEl.querySelector('#btn-run-all').disabled = false;
         return;
       }
       await sleep(800);
     }
 
+    clearRunState();
     updateStatus('all', 'done', '全部完成 ✓');
-    panelEl.querySelector('#btn-run-all').disabled = false;
+    if (panelEl) panelEl.querySelector('#btn-run-all').disabled = false;
+  }
+
+  // Check for pending run-all after page reload
+  function resumeIfNeeded() {
+    const state = getRunState();
+    if (!state) return;
+    const nextStep = state.step + 1; // The step that saved state already ran (delete), skip to next
+    if (nextStep >= ALL_STEPS.length) { clearRunState(); return; }
+    log(`[runAll] Resuming after page reload, continuing from step ${nextStep + 1} (${ALL_STEPS[nextStep].key})`);
+    updateStatus('all', 'running', `页面刷新后恢复，从 [${ALL_STEPS[nextStep].key}] 继续...`);
+    // Wait a bit for page to settle, then resume
+    setTimeout(() => runAll(nextStep), 3000);
   }
 
   // ═══════════════════════════════════════════════
@@ -973,8 +1012,9 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   // ═══════════════════════════════════════════════
   function init() {
     console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'init()', { readyState: document.readyState, body: !!document.body });
-    log('PWA AutoBot v2.0 loaded');
+    log('PWA AutoBot v2.1 loaded');
     createPanel();
+    resumeIfNeeded();
   }
 
   if (document.readyState === 'complete') {
