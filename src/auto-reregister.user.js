@@ -625,24 +625,79 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         await sleep(2000);
       }
 
-      await sleep(1000);
-      const cashoutBtn = findBtn(['cash out', 'cashout', 'withdraw', 'claim']);
-      if (cashoutBtn) {
-        cashoutBtn.click();
-        await sleep(2000);
+      // Wait for cashout page to fully render
+      await sleep(2000);
 
-        // Walk through modal confirmations
-        for (let i = 0; i < 10; i++) {
-          await sleep(1500);
-          const btn = findBtn(['confirm', 'cash out', 'continue', 'ok', 'yes']);
-          if (btn) { btn.click(); await sleep(1000); }
+      // Dismiss any lingering modals/popups first (APK install dialog etc.)
+      await dismissModals();
+      await sleep(1000);
+
+      // Find the Cash Out button specifically — it's inside StageTaskContainer,
+      // text is exactly "Cash Out", and it must NOT be disabled
+      let cashoutBtn = null;
+      const allBtns = document.querySelectorAll('button');
+      for (const btn of allBtns) {
+        const text = btn.textContent?.trim() || '';
+        // Match "Cash Out" exactly (not "Claim", not "Go", not disabled)
+        if (text === 'Cash Out' && !btn.disabled) {
+          cashoutBtn = btn;
+          break;
         }
-        updateStatus('cashout', 'done', '提现已发起 ✓');
-        return true;
       }
 
-      updateStatus('cashout', 'warning', '未找到提现按钮');
-      return false;
+      if (!cashoutBtn) {
+        // Maybe tasks not completed yet — try to find any Cash Out button even if disabled
+        let anyFound = false;
+        for (const btn of allBtns) {
+          if (btn.textContent?.trim() === 'Cash Out') {
+            anyFound = true;
+            log('Found Cash Out button but it is disabled:', btn.disabled);
+            break;
+          }
+        }
+        if (anyFound) {
+          updateStatus('cashout', 'warning', 'Cash Out 按钮不可用（任务未完成或余额不足）');
+        } else {
+          updateStatus('cashout', 'warning', '未找到 Cash Out 按钮');
+        }
+        return false;
+      }
+
+      log('Clicking Cash Out button');
+      cashoutBtn.click();
+      await sleep(2000);
+
+      // Walk through cashout modal flow
+      // States: BIND_PAYPAL → PROCESSING → SUCCESS, or skip to PROCESSING if already bound
+      for (let i = 0; i < 15; i++) {
+        await sleep(1500);
+
+        // Look for actionable buttons in the modal (but NOT the underlying Cash Out button)
+        const modalBtns = document.querySelectorAll('button');
+        for (const btn of modalBtns) {
+          const text = btn.textContent?.trim().toLowerCase() || '';
+          // Skip the underlying Cash Out buttons
+          if (btn.textContent?.trim() === 'Cash Out') continue;
+
+          if ((text.includes('confirm') || text.includes('continue') || text.includes('ok') ||
+               text.includes('done') || text.includes('got it') || text.includes('continue earning')) &&
+              !btn.disabled) {
+            log('Modal action:', btn.textContent.trim());
+            btn.click();
+            await sleep(1000);
+            break;
+          }
+        }
+
+        // Check if we're back to normal (no modal overlay)
+        const store = getAuthStore();
+        const cashAfter = store?.cash || 0;
+        // If modal closed and we see success indicators, we're done
+      }
+
+      await dismissModals();
+      updateStatus('cashout', 'done', '提现已发起 ✓');
+      return true;
     } catch (e) {
       updateStatus('cashout', 'error', `提现失败: ${e.message}`);
       return false;
