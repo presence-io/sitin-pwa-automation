@@ -248,47 +248,57 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         usernameInput.focus();
         setNativeValue(usernameInput, name);
         await sleep(300);
-        const btn = findBtn(['continue', 'next']);
-        if (btn) btn.click();
-        await sleep(3000); // wait for animation + next page
+        const btn = findBtn(['claim', 'continue', 'next']);
+        if (btn) { log('Click:', btn.textContent.trim()); btn.click(); }
+        await sleep(3500); // wait for money animation (2s) + transition
       }
 
       // ── Page 2: Age ──
       log('Onboarding step 2: age');
       await sleep(500);
-      const ageInput = document.querySelector('input[type="text"], input[inputmode="numeric"]');
+      const ageInput = document.querySelector('input[type="number"], input[inputmode="numeric"]');
       if (ageInput) {
         ageInput.focus();
         setNativeValue(ageInput, String(CONFIG.age));
         await sleep(300);
-        const btn = findBtn(['continue', 'next']);
-        if (btn) btn.click();
-        await sleep(3000);
+        const btn = findBtn(['claim', 'continue', 'next']);
+        if (btn) { log('Click:', btn.textContent.trim()); btn.click(); }
+        await sleep(3500);
       }
 
       // ── Page 3: Photo ──
-      log('Onboarding step 3: photo (click continue/skip)');
+      // Photo requires actual file upload + beauty score check, hard to automate.
+      // Just click "Claim 0.3 $" if a photo is already cached, otherwise warn.
+      log('Onboarding step 3: photo');
       await sleep(500);
-      let photoBtn = findBtn(['continue', 'next', 'skip', 'done']);
-      if (photoBtn) {
+      let photoBtn = findBtn(['claim', 'continue', 'skip']);
+      if (photoBtn && !photoBtn.disabled) {
+        log('Click:', photoBtn.textContent.trim());
         photoBtn.click();
-        await sleep(3000);
+        await sleep(3500);
+      } else {
+        warn('Photo button disabled — need to upload a photo manually');
+        updateStatus('onboarding', 'warning', '需要手动上传头像后再继续');
+        return false;
       }
 
-      // ── Page 4: Phone (may be skipped if logged in via verified phone) ──
-      log('Onboarding step 4: phone (if needed)');
+      // ── Page 4: Phone (may appear if not logged in via verified phone) ──
+      log('Onboarding step 4: phone (if visible)');
       await sleep(500);
-      const phoneInput = document.querySelector('input[inputmode="numeric"], input[type="tel"]');
+      const phoneInput = document.querySelector('input[inputmode="numeric"]');
       if (phoneInput) {
-        // Fill a dummy phone or skip
         phoneInput.focus();
         setNativeValue(phoneInput, '2025551234');
         await sleep(300);
-      }
-      let finalBtn = findBtn(['continue', 'next', 'submit', 'done']);
-      if (finalBtn) {
-        finalBtn.click();
-        await sleep(3000);
+        const btn = findBtn(['next', 'continue', 'submit', 'done']);
+        if (btn) { log('Click:', btn.textContent.trim()); btn.click(); }
+        await sleep(2000);
+
+        // Phone page has a confirm dialog, auto-click "Confirm"
+        await sleep(1000);
+        const confirmBtn = findBtn(['confirm']);
+        if (confirmBtn) { log('Click confirm dialog'); confirmBtn.click(); }
+        await sleep(2000);
       }
 
       // Wait for registration to complete
