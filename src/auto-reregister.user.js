@@ -26,6 +26,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     username: '',          // 留空自动生成
     age: 22,
     paypalEmail: '',      // PayPal 邮箱
+    photoUrl: '',         // 头像图片 URL（留空则生成随机头像）
   };
 
   // ═══════════════════════════════════════════════
@@ -82,6 +83,71 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   }
   function getToken() { return localStorage.getItem('haven_token') || ''; }
   function getUserId() { return getAuthStore()?.userInfo?.userId || null; }
+
+  // Generate a random avatar image (canvas-based, returns a File)
+  function generateAvatarFile() {
+    const size = 400;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Random background gradient
+    const hue = Math.floor(Math.random() * 360);
+    const grad = ctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0, `hsl(${hue}, 70%, 80%)`);
+    grad.addColorStop(1, `hsl(${(hue + 60) % 360}, 70%, 65%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    // Simple face: skin-tone circle
+    ctx.fillStyle = '#FFDBB4';
+    ctx.beginPath();
+    ctx.arc(size/2, size/2 - 10, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(size/2 - 35, size/2 - 30, 10, 0, Math.PI * 2);
+    ctx.arc(size/2 + 35, size/2 - 30, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Smile
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(size/2, size/2 + 10, 40, 0.1 * Math.PI, 0.9 * Math.PI);
+    ctx.stroke();
+
+    // Hair
+    ctx.fillStyle = `hsl(${Math.floor(Math.random()*40)+10}, 40%, 25%)`;
+    ctx.beginPath();
+    ctx.ellipse(size/2, size/2 - 100, 130, 60, 0, Math.PI, 0);
+    ctx.fill();
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.9);
+    });
+  }
+
+  // Fetch an image URL and return as File
+  async function fetchImageAsFile(url) {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const ext = blob.type.includes('png') ? 'png' : 'jpg';
+    return new File([blob], `avatar.${ext}`, { type: blob.type });
+  }
+
+  // Inject a File into a file input element (triggers React's onChange)
+  function injectFileToInput(inputEl, file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    inputEl.files = dt.files;
+    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
 
   // Find a button by text content (case insensitive, partial match)
   function findBtn(texts) {
@@ -267,19 +333,85 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       }
 
       // ── Page 3: Photo ──
-      // Photo requires actual file upload + beauty score check, hard to automate.
-      // Just click "Claim 0.3 $" if a photo is already cached, otherwise warn.
       log('Onboarding step 3: photo');
       await sleep(500);
-      let photoBtn = findBtn(['claim', 'continue', 'skip']);
-      if (photoBtn && !photoBtn.disabled) {
-        log('Click:', photoBtn.textContent.trim());
+
+      // Check if photo button is disabled (no photo uploaded yet)
+      let photoBtn = findBtn(['claim']);
+      if (!photoBtn || photoBtn.disabled) {
+        log('No photo yet, auto-uploading...');
+
+        // Prepare photo file
+        let photoFile;
+        try {
+          if (CONFIG.photoUrl) {
+            log('Fetching photo from URL:', CONFIG.photoUrl);
+            photoFile = await fetchImageAsFile(CONFIG.photoUrl);
+          } else {
+            log('Generating random avatar');
+            photoFile = await generateAvatarFile();
+          }
+        } catch (e) {
+          warn('Failed to prepare photo:', e);
+          updateStatus('onboarding', 'warning', '头像准备失败，需手动上传');
+          return false;
+        }
+
+        // Find hidden file input and inject file
+        const fileInput = document.querySelector('input[type="file"][accept*="image"]');
+        if (fileInput) {
+          log('Injecting file into input');
+          injectFileToInput(fileInput, photoFile);
+          await sleep(2000);
+
+          // Handle crop modal — find and click confirm/save/done button
+          for (let i = 0; i < 5; i++) {
+            await sleep(800);
+            const cropBtn = findBtn(['save', 'done', 'confirm', 'crop', 'ok']);
+            if (cropBtn) {
+              log('Crop modal: clicking', cropBtn.textContent.trim());
+              cropBtn.click();
+              await sleep(1500);
+              break;
+            }
+          }
+
+          // Now click the Claim button
+          await sleep(1000);
+          photoBtn = findBtn(['claim']);
+          if (photoBtn && !photoBtn.disabled) {
+            log('Click:', photoBtn.textContent.trim());
+            photoBtn.click();
+            await sleep(3500);
+          } else {
+            warn('Photo Claim button still disabled after upload');
+            updateStatus('onboarding', 'warning', '头像上传后按钮仍不可用，可能颜值校验未通过');
+            return false;
+          }
+        } else {
+          // No file input found, try clicking upload area to trigger it
+          warn('File input not found, trying upload area click');
+          const uploadArea = document.querySelector('[class*="dashed"]');
+          if (uploadArea) uploadArea.click();
+          await sleep(1000);
+
+          const fi = document.querySelector('input[type="file"]');
+          if (fi) {
+            injectFileToInput(fi, photoFile);
+            await sleep(3000);
+            const cropBtn = findBtn(['save', 'done', 'confirm', 'ok']);
+            if (cropBtn) { cropBtn.click(); await sleep(1500); }
+            photoBtn = findBtn(['claim']);
+            if (photoBtn && !photoBtn.disabled) { photoBtn.click(); await sleep(3500); }
+          } else {
+            updateStatus('onboarding', 'warning', '找不到文件上传入口');
+            return false;
+          }
+        }
+      } else {
+        log('Photo already uploaded, clicking:', photoBtn.textContent.trim());
         photoBtn.click();
         await sleep(3500);
-      } else {
-        warn('Photo button disabled — need to upload a photo manually');
-        updateStatus('onboarding', 'warning', '需要手动上传头像后再继续');
-        return false;
       }
 
       // ── Page 4: Phone (may appear if not logged in via verified phone) ──
@@ -539,6 +671,8 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
           <input type="number" id="cfg-age" value="${CONFIG.age}">
           <label>PayPal 邮箱</label>
           <input type="email" id="cfg-paypal" placeholder="your@email.com" value="${CONFIG.paypalEmail}">
+          <label>头像 URL (留空自动生成随机头像)</label>
+          <input type="text" id="cfg-photo" placeholder="https://... 或留空" value="${CONFIG.photoUrl}">
         </div>
         <div class="row"><button id="btn-s1">1. 注销账号</button><span class="st" id="st-delete">待执行</span></div>
         <div class="row"><button id="btn-s2">2. 快速登录</button><span class="st" id="st-login">待执行</span></div>
@@ -562,6 +696,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     p.querySelector('#cfg-username').addEventListener('input', e => { CONFIG.username = e.target.value.trim(); });
     p.querySelector('#cfg-age').addEventListener('input', e => { CONFIG.age = parseInt(e.target.value) || 22; });
     p.querySelector('#cfg-paypal').addEventListener('input', e => { CONFIG.paypalEmail = e.target.value.trim(); });
+    p.querySelector('#cfg-photo').addEventListener('input', e => { CONFIG.photoUrl = e.target.value.trim(); });
 
     // Step buttons
     p.querySelector('#btn-s1').addEventListener('click', () => stepDeleteAccount());
