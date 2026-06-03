@@ -16,8 +16,16 @@
 
 // ── 也可以不用油猴，直接在浏览器 Console 粘贴执行，或通过 <script> 标签注入 ──
 
+console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'IIFE entry point reached', {
+  url: location.href,
+  readyState: document.readyState,
+  timestamp: new Date().toISOString(),
+});
+
 (function () {
   'use strict';
+
+  console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Inside IIFE, strict mode OK');
 
   // ═══════════════════════════════════════════════
   // Config
@@ -683,9 +691,18 @@
   `;
 
   function createPanel() {
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'createPanel() called');
+
+    if (document.getElementById('autobot-panel')) {
+      console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Panel already exists, skipping');
+      return;
+    }
+
     if (typeof GM_addStyle === 'function') {
+      console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Using GM_addStyle (Tampermonkey detected)');
       GM_addStyle(PANEL_STYLE);
     } else {
+      console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Using manual style injection (no Tampermonkey)');
       const style = document.createElement('style');
       style.textContent = PANEL_STYLE;
       document.head.appendChild(style);
@@ -748,6 +765,14 @@
 
     document.body.appendChild(panel);
     panelEl = panel;
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Panel DOM appended to body', {
+      bodyChildren: document.body.children.length,
+      panelInDOM: !!document.getElementById('autobot-panel'),
+      panelZIndex: getComputedStyle(panel).zIndex,
+      panelDisplay: getComputedStyle(panel).display,
+      panelPosition: getComputedStyle(panel).position,
+      panelRect: panel.getBoundingClientRect(),
+    });
 
     // Bind config inputs
     panel.querySelector('#cfg-phone').addEventListener('input', (e) => { CONFIG.phoneNumber = e.target.value.trim(); });
@@ -837,13 +862,20 @@
   // Init
   // ═══════════════════════════════════════════════
   function init() {
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'init() called', {
+      readyState: document.readyState,
+      bodyExists: !!document.body,
+      bodyChildCount: document.body?.children?.length,
+    });
     log('PWA AutoBot loaded');
     createPanel();
   }
 
   if (document.readyState === 'complete') {
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'readyState=complete, calling init() immediately');
     init();
   } else {
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'readyState=' + document.readyState + ', waiting for load event');
     window.addEventListener('load', init);
   }
 })();
