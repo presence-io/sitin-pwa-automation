@@ -389,13 +389,39 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
             }
           }
 
-          // Now click the Claim button
+          // Now click the Claim button and wait for page transition
           await sleep(1000);
           photoBtn = findBtn(['claim']);
           if (photoBtn && !photoBtn.disabled) {
             log('Click:', photoBtn.textContent.trim());
             photoBtn.click();
-            await sleep(3500);
+            // Photo onClick does: beauty check → compress → upload → onContinue
+            // This can take 5-15 seconds, so poll for page change instead of fixed wait
+            log('Waiting for photo upload + page transition...');
+            let photoAdvanced = false;
+            for (let w = 0; w < 30; w++) { // up to 30 seconds
+              await sleep(1000);
+              const s = getAuthStore();
+              const pageText = document.body.innerText || '';
+              // Detect phone page appeared
+              if (pageText.includes('US+1') || pageText.includes('Phone Number')) {
+                log('Phone page appeared after photo step');
+                photoAdvanced = true;
+                break;
+              }
+              // Or registration completed directly
+              if (s?.userState === 'FullRegister' || location.pathname === '/') {
+                log('Registration completed after photo step');
+                updateStatus('onboarding', 'done', '注册完成 ✓');
+                return true;
+              }
+              if (w % 5 === 0) log('Still waiting for photo step to finish...', w + 's');
+            }
+            if (!photoAdvanced) {
+              warn('Photo step did not advance — beauty check may have failed or upload timed out');
+              updateStatus('onboarding', 'warning', '头像步骤未前进，可能颜值校验失败或上传超时');
+              return false;
+            }
           } else {
             warn('Photo Claim button still disabled after upload');
             updateStatus('onboarding', 'warning', '头像上传后按钮仍不可用，可能颜值校验未通过');
@@ -427,26 +453,24 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         await sleep(3500);
       }
 
-      // ── Page 4: Phone (may appear if not logged in via verified phone) ──
-      log('Onboarding step 4: waiting for phone page...');
+      // ── Page 4: Phone (already detected above, or detect now) ──
+      log('Onboarding step 4: checking phone page...');
+      await sleep(500);
 
-      // Wait for phone page to appear (detect by "US+1" or "Phone Number" text)
+      // Check if phone page is visible
       let phonePage = false;
-      for (let i = 0; i < 10; i++) {
-        await sleep(800);
+      for (let i = 0; i < 5; i++) {
         const allText = document.body.innerText || '';
-        if (allText.includes('US+1') || allText.includes('Phone Number') || allText.includes('phone number')) {
+        if (allText.includes('US+1') || allText.includes('Phone Number')) {
           phonePage = true;
           break;
         }
-        // Also check if we already landed on home (registration done, phone skipped)
         const s = getAuthStore();
         if (s?.userState === 'FullRegister' || location.pathname === '/') {
-          log('Already fully registered, phone step skipped');
           updateStatus('onboarding', 'done', '注册完成 ✓');
           return true;
         }
-        log('Waiting for phone page...', i);
+        await sleep(600);
       }
 
       if (phonePage) {
