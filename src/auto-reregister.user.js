@@ -133,12 +133,25 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     });
   }
 
-  // Fetch an image URL and return as File
-  async function fetchImageAsFile(url) {
-    const resp = await fetch(url);
-    const blob = await resp.blob();
-    const ext = blob.type.includes('png') ? 'png' : 'jpg';
-    return new File([blob], `avatar.${ext}`, { type: blob.type });
+  // Fetch an image URL and return as File (via canvas to guarantee valid image blob)
+  function fetchImageAsFile(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+          resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.92);
+      };
+      img.onerror = () => reject(new Error('Image load failed: ' + url));
+      img.src = url;
+    });
   }
 
   // Inject a File into a file input element (triggers React's onChange)
