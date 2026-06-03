@@ -422,22 +422,39 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   // UI Panel
   // ═══════════════════════════════════════════════
   let panelEl = null;
-  let panelVisible = true;
+  let expanded = false;
 
   const PANEL_STYLE = `
-    #autobot-panel {
-      position: fixed; top: 10px; right: 10px; width: 320px; max-height: 90vh;
-      overflow-y: auto; background: #1a1a2e; color: #eee; border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 999999;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px;
+    #autobot-fab {
+      position: fixed; bottom: 20px; right: 20px; width: 48px; height: 48px;
+      border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #0f3460);
+      color: #fff; border: none; cursor: pointer; z-index: 999999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: bold; transition: transform .2s;
     }
-    #autobot-panel.collapsed { width: auto; max-height: none; overflow: hidden; }
+    #autobot-fab:hover { transform: scale(1.1); }
+    #autobot-fab.has-panel { background: #16213e; border: 2px solid #00bcd4; }
+
+    #autobot-panel {
+      position: fixed; bottom: 78px; right: 20px; width: 320px; max-height: 80vh;
+      overflow-y: auto; background: #1a1a2e; color: #eee; border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45); z-index: 999998;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px;
+      transform: scale(0.9); opacity: 0; pointer-events: none;
+      transform-origin: bottom right; transition: transform .25s ease, opacity .25s ease;
+    }
+    #autobot-panel.open { transform: scale(1); opacity: 1; pointer-events: auto; }
     #autobot-panel .hdr {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px; background: #16213e; border-radius: 12px 12px 0 0;
-      cursor: move; user-select: none;
+      user-select: none;
     }
     #autobot-panel .hdr h3 { margin: 0; font-size: 14px; font-weight: 700; color: #00bcd4; }
+    #autobot-panel .hdr .close-btn {
+      background: none; border: none; color: #888; cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1;
+    }
+    #autobot-panel .hdr .close-btn:hover { color: #eee; }
     #autobot-panel .body { padding: 10px 14px; }
     #autobot-panel .cfg { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #333; }
     #autobot-panel .cfg label { display: block; margin-bottom: 4px; font-size: 11px; color: #aaa; }
@@ -466,23 +483,44 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     }
     #autobot-panel #btn-run-all:hover { opacity: .9; }
     #autobot-panel #btn-run-all:disabled { opacity: .5; cursor: not-allowed; }
-    #autobot-panel .tbtn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 16px; padding: 2px 6px; }
     #autobot-panel .info { padding: 6px 8px; background: #0f3460; border-radius: 6px; margin-bottom: 10px; font-size: 11px; color: #aaa; }
     #autobot-panel .info strong { color: #00bcd4; }
   `;
 
+  function togglePanel() {
+    expanded = !expanded;
+    panelEl.classList.toggle('open', expanded);
+    fabEl.classList.toggle('has-panel', expanded);
+    fabEl.textContent = expanded ? '✕' : '⚡';
+  }
+
+  let fabEl = null;
+
   function createPanel() {
     console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'createPanel()');
-    if (document.getElementById('autobot-panel')) return;
+    if (document.getElementById('autobot-fab')) return;
 
     if (typeof GM_addStyle === 'function') { GM_addStyle(PANEL_STYLE); }
     else { const s = document.createElement('style'); s.textContent = PANEL_STYLE; document.head.appendChild(s); }
 
+    // FAB button
+    const fab = document.createElement('button');
+    fab.id = 'autobot-fab';
+    fab.textContent = '⚡';
+    fab.title = 'PWA AutoBot';
+    fab.addEventListener('click', togglePanel);
+    document.body.appendChild(fab);
+    fabEl = fab;
+
+    // Panel
     const p = document.createElement('div');
     p.id = 'autobot-panel';
     p.innerHTML = `
-      <div class="hdr"><h3>PWA AutoBot</h3><button class="tbtn" id="btn-toggle">−</button></div>
-      <div class="body" id="panel-body">
+      <div class="hdr">
+        <h3>PWA AutoBot</h3>
+        <button class="close-btn" id="btn-close" title="收起">✕</button>
+      </div>
+      <div class="body">
         <div class="info" id="user-info">加载中...</div>
         <div class="cfg">
           <label>用户名 (留空自动生成)</label>
@@ -505,7 +543,10 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     document.body.appendChild(p);
     panelEl = p;
 
-    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Panel injected', p.getBoundingClientRect());
+    console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'Panel + FAB injected');
+
+    // Close button inside panel header
+    p.querySelector('#btn-close').addEventListener('click', togglePanel);
 
     // Config bindings
     p.querySelector('#cfg-username').addEventListener('input', e => { CONFIG.username = e.target.value.trim(); });
@@ -519,21 +560,6 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     p.querySelector('#btn-s4').addEventListener('click', () => stepBindPaypal());
     p.querySelector('#btn-s5').addEventListener('click', () => stepCashout());
     p.querySelector('#btn-run-all').addEventListener('click', () => runAll());
-
-    // Toggle
-    p.querySelector('#btn-toggle').addEventListener('click', () => {
-      panelVisible = !panelVisible;
-      p.querySelector('#panel-body').style.display = panelVisible ? 'block' : 'none';
-      p.querySelector('#btn-toggle').textContent = panelVisible ? '−' : '+';
-    });
-
-    // Drag
-    let dragging = false, ox, oy;
-    p.querySelector('.hdr').addEventListener('mousedown', e => {
-      dragging = true; ox = e.clientX - p.getBoundingClientRect().left; oy = e.clientY - p.getBoundingClientRect().top;
-    });
-    document.addEventListener('mousemove', e => { if (!dragging) return; p.style.left=(e.clientX-ox)+'px'; p.style.top=(e.clientY-oy)+'px'; p.style.right='auto'; });
-    document.addEventListener('mouseup', () => { dragging = false; });
 
     // User info refresh
     refreshUserInfo();
