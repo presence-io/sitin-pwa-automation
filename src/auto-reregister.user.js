@@ -163,19 +163,21 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   }
 
   // Auto-dismiss any reward/congrats/popup modals
-  async function dismissModals() {
-    log('[dismissModals] start — scanning page for modals...');
+  // skipCashout: don't click "Cash out" buttons (used after onboarding to avoid triggering cashout flow)
+  async function dismissModals(skipCashout = false) {
+    log('[dismissModals] start, skipCashout:', skipCashout);
     for (let round = 0; round < 8; round++) {
-      // Log all visible buttons for debugging
       const allBtns = [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null);
       log(`[dismissModals] round ${round}, visible buttons:`, allBtns.map(b => `"${b.textContent?.trim()}" disabled=${b.disabled}`));
 
-      // Log all visible img with alt containing "close"
       const closeImgs = [...document.querySelectorAll('img')].filter(i => i.alt?.toLowerCase().includes('close') && i.offsetParent !== null);
-      log(`[dismissModals] close images found:`, closeImgs.length, closeImgs.map(i => ({ alt: i.alt, src: i.src?.slice(-30) })));
+      log(`[dismissModals] close images:`, closeImgs.length);
 
-      // Try text-based buttons first
-      const btn = findBtn(['continue earning', 'cash out', 'continue', 'got it', 'ok', 'close', 'claim']);
+      // Build keyword list based on context
+      const keywords = ['continue earning', 'continue', 'got it', 'ok', 'close'];
+      if (!skipCashout) keywords.push('cash out');
+
+      const btn = findBtn(keywords);
       if (btn) {
         log('[dismissModals] clicking button:', btn.textContent.trim());
         btn.click();
@@ -183,7 +185,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         continue;
       }
 
-      // Look for close icon: <button> wrapping or <img> itself
+      // aria-label close button
       const closeBtn = document.querySelector('button[aria-label="Close"], button[aria-label="close"]');
       if (closeBtn && closeBtn.offsetParent !== null) {
         log('[dismissModals] clicking close button (aria-label)');
@@ -192,15 +194,15 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         continue;
       }
 
-      // img[alt="close"] — might be clickable directly (not inside a <button>)
+      // img[alt="close"] clickable directly
       if (closeImgs.length > 0) {
-        log('[dismissModals] clicking close img directly');
+        log('[dismissModals] clicking close img');
         closeImgs[0].click();
         await sleep(1000);
         continue;
       }
 
-      log('[dismissModals] no modal elements found, done');
+      log('[dismissModals] nothing to dismiss, done');
       break;
     }
   }
@@ -580,9 +582,9 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         await sleep(1000);
         const s = getAuthStore();
         if (s?.userState === 'FullRegister' || location.pathname === '/') {
-          // Auto-dismiss any reward/congrats modals that pop up
+          // Auto-dismiss any reward/congrats modals (but NOT cashout — we handle that later)
           await sleep(1500);
-          await dismissModals();
+          await dismissModals(true);
           updateStatus('onboarding', 'done', '注册完成 ✓');
           return true;
         }
