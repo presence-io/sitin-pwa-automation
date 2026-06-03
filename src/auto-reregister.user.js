@@ -164,24 +164,24 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
 
   // Auto-dismiss any reward/congrats/popup modals
   async function dismissModals() {
-    for (let round = 0; round < 5; round++) {
-      const btn = findBtn(['continue earning', 'continue', 'got it', 'ok', 'close', 'claim']);
+    for (let round = 0; round < 8; round++) {
+      // Try text-based buttons first
+      const btn = findBtn(['continue earning', 'cash out', 'continue', 'got it', 'ok', 'close', 'claim']);
       if (btn) {
         log('Dismissing modal:', btn.textContent.trim());
         btn.click();
-        await sleep(1000);
+        await sleep(1200);
+        continue;
       }
       // Also look for close icon buttons (img alt="close" or aria-label="Close")
-      const closeIcon = document.querySelector('button[aria-label="Close"], button[aria-label="close"]');
+      const closeIcon = document.querySelector('button[aria-label="Close"], button[aria-label="close"], img[alt="close"]');
       if (closeIcon) {
         log('Dismissing modal via close icon');
         closeIcon.click();
         await sleep(1000);
+        continue;
       }
-      // Check if any fullscreen modal overlay is still visible
-      const overlay = document.querySelector('[class*="bg-black/"], [class*="bg-black\\/"]');
-      if (!overlay && !findBtn(['continue earning'])) break;
-      await sleep(500);
+      break;
     }
   }
 
@@ -413,39 +413,50 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
           }
 
           // Now click the Claim button and wait for page transition
-          await sleep(1000);
-          photoBtn = findBtn(['claim']);
-          if (photoBtn && !photoBtn.disabled) {
-            log('Click:', photoBtn.textContent.trim());
+          // Beauty check may fail randomly — retry up to 3 times
+          let photoAdvanced = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            await sleep(1000);
+            photoBtn = findBtn(['claim']);
+            if (!photoBtn || photoBtn.disabled) {
+              warn('Photo Claim button not ready on attempt', attempt);
+              await sleep(2000);
+              continue;
+            }
+
+            log('Click Claim (attempt', attempt + 1, '):', photoBtn.textContent.trim());
             photoBtn.click();
-            // Photo onClick does: beauty check → compress → upload → onContinue
-            // This can take 5-15 seconds, so poll for page change instead of fixed wait
+
+            // Wait for photo upload + beauty check + page transition (up to 30s)
             log('Waiting for photo upload + page transition...');
-            let photoAdvanced = false;
-            for (let w = 0; w < 30; w++) { // up to 30 seconds
+            for (let w = 0; w < 30; w++) {
               await sleep(1000);
               const s = getAuthStore();
               const pageText = document.body.innerText || '';
-              // Detect phone page appeared
               if (pageText.includes('US+1') || pageText.includes('Phone Number')) {
                 log('Phone page appeared after photo step');
                 photoAdvanced = true;
                 break;
               }
-              // Or registration completed directly
               if (s?.userState === 'FullRegister' || location.pathname === '/') {
                 log('Registration completed after photo step');
+                await sleep(1500);
+                await dismissModals();
                 updateStatus('onboarding', 'done', '注册完成 ✓');
                 return true;
               }
-              if (w % 5 === 0) log('Still waiting for photo step to finish...', w + 's');
+              if (w % 5 === 0) log('Still waiting for photo step...', w + 's');
             }
-            if (!photoAdvanced) {
-              warn('Photo step did not advance — beauty check may have failed or upload timed out');
-              updateStatus('onboarding', 'warning', '头像步骤未前进，可能颜值校验失败或上传超时');
-              return false;
-            }
-          } else {
+
+            if (photoAdvanced) break;
+            warn('Beauty check may have failed, retrying... (attempt', attempt + 1, ')');
+            await sleep(1000);
+          }
+
+          if (!photoAdvanced) {
+            updateStatus('onboarding', 'warning', '头像步骤多次重试仍未通过');
+            return false;
+          }
             warn('Photo Claim button still disabled after upload');
             updateStatus('onboarding', 'warning', '头像上传后按钮仍不可用，可能颜值校验未通过');
             return false;
