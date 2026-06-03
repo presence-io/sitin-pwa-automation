@@ -1,16 +1,20 @@
 // ==UserScript==
 // @name         Sitin PWA Auto Re-register
 // @namespace    https://github.com/sitin-pwa-automation
-// @version      1.0.0
+// @version      1.1.0
 // @description  一键注销账号 → 重新注册 → 第一笔提现 自动化脚本
 // @match        *://pwa.aifantasy.com/*
 // @match        *://pwa-staging.aifantasy.com/*
-// @match        *://localhost:*/*
-// @match        *://127.0.0.1:*/*
-// @grant        unsafeWindow
+// @match        *://*.sitin.ai/*
+// @match        http://localhost:3000/*
+// @match        http://localhost:5173/*
+// @match        http://localhost:*/*
+// @match        http://127.0.0.1:*/*
 // @grant        GM_addStyle
 // @run-at       document-idle
 // ==/UserScript==
+
+// ── 也可以不用油猴，直接在浏览器 Console 粘贴执行，或通过 <script> 标签注入 ──
 
 (function () {
   'use strict';
