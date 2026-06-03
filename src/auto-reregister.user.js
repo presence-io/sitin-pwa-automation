@@ -428,28 +428,46 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       }
 
       // ── Page 4: Phone (may appear if not logged in via verified phone) ──
-      log('Onboarding step 4: phone (if visible)');
-      await sleep(1000);
+      log('Onboarding step 4: waiting for phone page...');
 
-      // Detect phone page by looking for the "US+1" prefix text
-      const isPhonePage = !!Array.from(document.querySelectorAll('span')).find(
-        s => s.textContent?.includes('US+1')
-      );
+      // Wait for phone page to appear (detect by "US+1" or "Phone Number" text)
+      let phonePage = false;
+      for (let i = 0; i < 10; i++) {
+        await sleep(800);
+        const allText = document.body.innerText || '';
+        if (allText.includes('US+1') || allText.includes('Phone Number') || allText.includes('phone number')) {
+          phonePage = true;
+          break;
+        }
+        // Also check if we already landed on home (registration done, phone skipped)
+        const s = getAuthStore();
+        if (s?.userState === 'FullRegister' || location.pathname === '/') {
+          log('Already fully registered, phone step skipped');
+          updateStatus('onboarding', 'done', '注册完成 ✓');
+          return true;
+        }
+        log('Waiting for phone page...', i);
+      }
 
-      if (isPhonePage) {
+      if (phonePage) {
         log('Phone page detected');
-        // Find the phone input — it's inside a container with "US+1" label
         const phoneInput = document.querySelector('input[inputmode="numeric"]');
         if (phoneInput) {
           phoneInput.focus();
-          // Type digits one by one to trigger formatUsPhone correctly
+          await sleep(200);
+
+          // Clear existing value first
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(phoneInput, '');
+          phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+          await sleep(100);
+
+          // Type digits one by one
           const digits = '2025551234';
           for (const ch of digits) {
             const cur = phoneInput.value || '';
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(phoneInput, cur + ch);
-            phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
-            phoneInput.dispatchEvent(new Event('change', { bubbles: true }));
-            await sleep(30);
+            phoneInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+            await sleep(50);
           }
           log('Phone filled:', phoneInput.value);
           await sleep(500);
@@ -459,23 +477,28 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
           if (nextBtn) {
             log('Click:', nextBtn.textContent.trim());
             nextBtn.click();
+          } else {
+            warn('Next button not found on phone page');
           }
           await sleep(2000);
 
           // Handle confirm dialog — wait for it to appear and click "Confirm"
-          for (let i = 0; i < 8; i++) {
+          for (let i = 0; i < 10; i++) {
             await sleep(500);
             const confirmBtn = findBtn(['confirm']);
             if (confirmBtn) {
               log('Click confirm dialog');
               confirmBtn.click();
-              await sleep(1500);
+              await sleep(2000);
               break;
             }
+            log('Waiting for confirm dialog...', i);
           }
+        } else {
+          warn('Phone input not found on phone page');
         }
       } else {
-        log('Phone page not visible, skipping (may have verified phone from login)');
+        log('Phone page not visible, skipping');
       }
 
       // Wait for registration to complete
