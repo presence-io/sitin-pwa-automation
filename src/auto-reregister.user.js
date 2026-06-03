@@ -162,6 +162,29 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     inputEl.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  // Auto-dismiss any reward/congrats/popup modals
+  async function dismissModals() {
+    for (let round = 0; round < 5; round++) {
+      const btn = findBtn(['continue earning', 'continue', 'got it', 'ok', 'close', 'claim']);
+      if (btn) {
+        log('Dismissing modal:', btn.textContent.trim());
+        btn.click();
+        await sleep(1000);
+      }
+      // Also look for close icon buttons (img alt="close" or aria-label="Close")
+      const closeIcon = document.querySelector('button[aria-label="Close"], button[aria-label="close"]');
+      if (closeIcon) {
+        log('Dismissing modal via close icon');
+        closeIcon.click();
+        await sleep(1000);
+      }
+      // Check if any fullscreen modal overlay is still visible
+      const overlay = document.querySelector('[class*="bg-black/"], [class*="bg-black\\/"]');
+      if (!overlay && !findBtn(['continue earning'])) break;
+      await sleep(500);
+    }
+  }
+
   // Find a button by text content (case insensitive, partial match)
   function findBtn(texts) {
     if (typeof texts === 'string') texts = [texts];
@@ -530,6 +553,9 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         await sleep(1000);
         const s = getAuthStore();
         if (s?.userState === 'FullRegister' || location.pathname === '/') {
+          // Auto-dismiss any reward/congrats modals that pop up
+          await sleep(1500);
+          await dismissModals();
           updateStatus('onboarding', 'done', '注册完成 ✓');
           return true;
         }
