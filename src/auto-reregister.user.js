@@ -20,13 +20,26 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   'use strict';
 
   // ═══════════════════════════════════════════════
-  // Config
+  // Config (persisted to localStorage)
   // ═══════════════════════════════════════════════
+  const AUTOBOT_CONFIG_KEY = 'autobot_config';
+
+  function loadConfig() {
+    try {
+      const raw = localStorage.getItem(AUTOBOT_CONFIG_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }
+  function saveConfig() {
+    localStorage.setItem(AUTOBOT_CONFIG_KEY, JSON.stringify(CONFIG));
+  }
+
+  const savedCfg = loadConfig();
   const CONFIG = {
-    username: '',          // 留空自动生成
-    age: 22,
-    paypalEmail: 'autobot_test@gmail.com',
-    photoUrl: 'https://file.archat.us/cai/user_custom_avatar/2100048298/e41dd7af-75e5-43c4-a88f-d3521824879e.jpg',
+    username: savedCfg.username ?? '',
+    age: savedCfg.age ?? 22,
+    paypalEmail: savedCfg.paypalEmail ?? 'autobot_test@gmail.com',
+    photoUrl: savedCfg.photoUrl ?? 'https://file.archat.us/cai/user_custom_avatar/2100048298/e41dd7af-75e5-43c4-a88f-d3521824879e.jpg',
   };
 
   // ═══════════════════════════════════════════════
@@ -792,7 +805,10 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
       }
 
       await dismissModals();
-      updateStatus('cashout', 'done', '提现已发起 ✓');
+      // Navigate back to home
+      spaNavigate('/');
+      await sleep(1000);
+      updateStatus('cashout', 'done', '提现已发起，已返回首页 ✓');
       return true;
     } catch (e) {
       updateStatus('cashout', 'error', `提现失败: ${e.message}`);
@@ -990,6 +1006,11 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         <div class="divider"></div>
         <div class="row"><span class="st" id="st-all" style="text-align:center;width:100%">—</span></div>
         <button id="btn-run-all">一键执行全部流程</button>
+        <div class="divider"></div>
+        <div class="row">
+          <button id="btn-disable-mock" style="border-color:#ff9800;flex:1">关闭 Mock 视频</button>
+          <button id="btn-enable-mock" style="border-color:#4caf50;flex:1">开启 Mock 视频</button>
+        </div>
       </div>
     `;
     document.body.appendChild(p);
@@ -1000,11 +1021,11 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     // Close button inside panel header
     p.querySelector('#btn-close').addEventListener('click', togglePanel);
 
-    // Config bindings
-    p.querySelector('#cfg-username').addEventListener('input', e => { CONFIG.username = e.target.value.trim(); });
-    p.querySelector('#cfg-age').addEventListener('input', e => { CONFIG.age = parseInt(e.target.value) || 22; });
-    p.querySelector('#cfg-paypal').addEventListener('input', e => { CONFIG.paypalEmail = e.target.value.trim(); });
-    p.querySelector('#cfg-photo').addEventListener('input', e => { CONFIG.photoUrl = e.target.value.trim(); });
+    // Config bindings — save to localStorage on every change
+    p.querySelector('#cfg-username').addEventListener('input', e => { CONFIG.username = e.target.value.trim(); saveConfig(); });
+    p.querySelector('#cfg-age').addEventListener('input', e => { CONFIG.age = parseInt(e.target.value) || 22; saveConfig(); });
+    p.querySelector('#cfg-paypal').addEventListener('input', e => { CONFIG.paypalEmail = e.target.value.trim(); saveConfig(); });
+    p.querySelector('#cfg-photo').addEventListener('input', e => { CONFIG.photoUrl = e.target.value.trim(); saveConfig(); });
 
     // Step buttons
     p.querySelector('#btn-s1').addEventListener('click', () => stepDeleteAccount());
@@ -1013,6 +1034,18 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
     p.querySelector('#btn-s4').addEventListener('click', () => stepBindPaypal());
     p.querySelector('#btn-s5').addEventListener('click', () => stepCashout());
     p.querySelector('#btn-run-all').addEventListener('click', () => runAll());
+
+    // Mock video toggle
+    p.querySelector('#btn-disable-mock').addEventListener('click', () => {
+      localStorage.setItem('debug_disable_auto_mock', '1');
+      log('Mock 视频已关闭');
+      alert('Mock 视频已关闭（刷新页面生效）');
+    });
+    p.querySelector('#btn-enable-mock').addEventListener('click', () => {
+      localStorage.setItem('debug_disable_auto_mock', '0');
+      log('Mock 视频已开启');
+      alert('Mock 视频已开启（刷新页面生效）');
+    });
 
     // User info refresh
     refreshUserInfo();
