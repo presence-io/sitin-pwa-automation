@@ -577,7 +577,25 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
             <button id="btn-mock-off" class="wide warn">关闭 Mock 视频</button>
             <button id="btn-mock-on" class="wide green">开启 Mock 视频</button>
           </div>
-          <div class="row"><button id="btn-task" class="wide">完成指定任务</button><input id="cfg-taskid" placeholder="Task ID" style="width:80px;padding:5px;background:#0f3460;border:1px solid #444;border-radius:5px;color:#eee;font-size:11px"></div>
+          <div class="row"><button id="btn-task" class="wide">完成指定任务</button><select id="cfg-taskid" style="width:140px;padding:5px;background:#0f3460;border:1px solid #444;border-radius:5px;color:#eee;font-size:10px">
+            <option value="">-- 选择任务 --</option>
+            <option value="101">101 Register</option>
+            <option value="102">102 Camera</option>
+            <option value="103">103 Microphone</option>
+            <option value="105">105 Location</option>
+            <option value="135">135 Location App</option>
+            <option value="112">112 Install APK</option>
+            <option value="118">118 Face Verify</option>
+            <option value="110">110 Bind Instagram</option>
+            <option value="107">107 Notification</option>
+            <option value="132">132 First Post</option>
+            <option value="200001">200001 SecondEarn</option>
+            <option value="200002">200002 ThirdEarn</option>
+            <option value="200003">200003 FourthEarn</option>
+            <option value="200004">200004 FifthEarn</option>
+            <option value="200010">200010 4th Duration</option>
+            <option value="200011">200011 5th Duration</option>
+          </select></div>
         `)}
       </div>
     `;
