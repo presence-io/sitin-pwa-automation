@@ -704,7 +704,26 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
         if (submitBtn) {
           log('[PayPal] Clicking submit:', submitBtn.textContent.trim());
           submitBtn.click();
-          await sleep(3000);
+          // After PayPal bind in Stage 1, cashout flow continues automatically
+          // (BIND_PAYPAL → PROCESSING → SUCCESS), so handle those modals here
+          log('[PayPal] Waiting for cashout flow to complete...');
+          for (let i = 0; i < 20; i++) {
+            await sleep(1500);
+            // Check for success or processing modals
+            const actionBtn = [...document.querySelectorAll('button')]
+              .filter(b => !b.closest('#autobot-panel') && b.offsetParent !== null)
+              .find(b => {
+                const t = b.textContent?.trim().toLowerCase() || '';
+                return (t.includes('got it') || t.includes('continue earning') || t.includes('ok')) && !b.disabled;
+              });
+            if (actionBtn) {
+              log('[PayPal] Cashout success, clicking:', actionBtn.textContent.trim());
+              actionBtn.click();
+              await sleep(1000);
+              break;
+            }
+          }
+          await dismissModals();
         } else {
           warn('[PayPal] No submit button found!');
         }
@@ -726,6 +745,16 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'script entry'
   // ═══════════════════════════════════════════════
   async function stepCashout() {
     updateStatus('cashout', 'running', '正在发起提现...');
+
+    // Check if cashout was already done during PayPal step (Stage 1 auto-flow)
+    const store = getAuthStore();
+    if (store?.cash === 0 || store?.videoCallCash === 0) {
+      log('[Cashout] Balance is 0, cashout likely already completed in PayPal step');
+      spaNavigate('/');
+      await sleep(1000);
+      updateStatus('cashout', 'done', '提现已完成（PayPal 步骤中自动完成），已返回首页 ✓');
+      return true;
+    }
 
     try {
       if (!location.pathname.includes('/cashout')) {
