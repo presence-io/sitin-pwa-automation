@@ -94,6 +94,36 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
     return null;
   }
 
+  function isInApp() {
+    return !!(window.pwaBridge && window.pwaBridge.inited);
+  }
+
+  // Click a task row on Home page by matching task text
+  async function clickHomeTask(taskText) {
+    spaNav('/'); await sleep(1500);
+    const divs = document.querySelectorAll('div[class*="flex items-center gap-1.5"]');
+    for (const div of divs) {
+      if (div.textContent?.includes(taskText) && div.offsetParent) {
+        log('Clicking home task:', taskText);
+        div.click();
+        await sleep(2000);
+        // Dismiss any reward modal
+        await dismissModals();
+        return true;
+      }
+    }
+    warn('Home task not found:', taskText);
+    return false;
+  }
+
+  // Complete a task — in App click Claim on Home, in browser use Debug finishTask
+  async function completeTask(taskId, homeTaskText) {
+    if (isInApp() && homeTaskText) {
+      return await clickHomeTask(homeTaskText);
+    }
+    return await finishTaskViaDebug(taskId);
+  }
+
   function spaNav(path) {
     window.history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -148,7 +178,9 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
     const btn = findBtn(['完成任务']);
     if (!btn) { warn('完成任务 button not found'); return false; }
     btn.click();
-    await sleep(1500);
+    await sleep(2000);
+    // Dismiss any reward modal that pops up
+    await dismissModals();
     log('finishTask done:', taskId);
     return true;
   }
@@ -360,7 +392,12 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
   // Stage 2: $7.00
   async function stepStage2() {
     st('s2', 'running', '完成 Stage 2 任务...');
-    await finishTasks([102, 103, 105, 112, 118, 110]); // Camera, Mic, Location, APK, Face, Instagram
+    await completeTask(102, 'Camera');       // Camera Permission
+    await completeTask(103, 'Microphone');   // Mic Permission
+    await completeTask(105, 'Location Access'); // Location Permission (not "Location App")
+    await completeTask(112, 'Install App');  // Install APK
+    await completeTask(118, 'Verify');       // Face Verify
+    await completeTask(110, 'Instagram');    // Bind Instagram
     st('s2', 'running', 'Mock Call 凑收益...');
     await runMockCalls(5); // 5 × $0.6 = $3.0 > $2.10
     st('s2', 'running', '提现 $7.00...');
@@ -372,7 +409,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
   // Stage 3: $8.00
   async function stepStage3() {
     st('s3', 'running', '完成 Stage 3 任务...');
-    await finishTasks([135]); // Location App
+    await completeTask(135, 'Location'); // Location Permission App
     st('s3', 'running', 'Mock Call 凑收益...');
     await runMockCalls(15); // 15 × $0.6 = $9.0 > $8
     st('s3', 'running', '提现 $8.00...');
@@ -472,8 +509,8 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
     const el = panelEl.querySelector('#user-info');
     if (!el) return;
     const s = getAuth();
-    if (s?.userInfo) el.innerHTML = `<b>ID:</b> ${s.userInfo.userId||'?'} | ${s.userInfo.username||'-'} | ${s.userState||'?'}`;
-    else el.innerHTML = getToken() ? 'Token 存在 | 无用户信息' : '<b>未登录</b>';
+    if (s?.userInfo) el.innerHTML = `<b>ID:</b> ${s.userInfo.userId||'?'} | ${s.userInfo.username||'-'} | ${s.userState||'?'} | ${isInApp()?'APP':'H5'}`;
+    else el.innerHTML = getToken() ? `Token 存在 | ${isInApp()?'APP':'H5'}` : '<b>未登录</b>';
   }
 
   // ═══════════════════════════════════════════════
