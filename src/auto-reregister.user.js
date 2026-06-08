@@ -148,7 +148,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
 
   async function dismissModals(skipCashout = false) {
     for (let r = 0; r < 6; r++) {
-      const kw = ['continue earning', 'got it', 'continue', 'ok'];
+      const kw = ['continue earning', 'got it', 'maybe later', 'continue', 'ok'];
       if (!skipCashout) kw.push('cash out');
       const btn = findBtn(kw);
       if (btn) { btn.click(); await sleep(1200); continue; }
@@ -196,8 +196,25 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
   // ═══════════════════════════════════════════════
   // Core helper: trigger Mock Call
   // ═══════════════════════════════════════════════
+  // Auto-accept incoming mock call dialogs
+  function installAutoAccept() {
+    if (window.__autobotAcceptObs) return;
+    window.__autobotAcceptObs = new MutationObserver(() => {
+      const btn = [...document.querySelectorAll('button')].find(b => b.textContent?.includes('Accept') && b.offsetParent);
+      if (btn) { log('Auto-accepting call'); btn.click(); }
+    });
+    window.__autobotAcceptObs.observe(document.body, { childList: true, subtree: true });
+    log('Auto-accept observer installed');
+  }
+  function removeAutoAccept() {
+    if (window.__autobotAcceptObs) { window.__autobotAcceptObs.disconnect(); window.__autobotAcceptObs = null; }
+  }
+
   async function triggerMockCall() {
     log('triggerMockCall');
+    // Ensure mock is enabled
+    localStorage.setItem('debug_disable_auto_mock', '0');
+    installAutoAccept();
     if (!location.pathname.includes('/debug')) { spaNav('/debug'); await sleep(1500); }
     // Set price
     const priceInput = [...document.querySelectorAll('input[placeholder*="$/min"]')].find(i => i.offsetParent);
@@ -211,6 +228,8 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
       await sleep(2000);
       if (!location.pathname.includes('/mock-call')) {
         log('Mock call finished');
+        await sleep(2000);
+        await dismissModals(); // dismiss call result + reward modals
         return true;
       }
     }
@@ -259,7 +278,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
         .filter(b => !b.closest('#autobot-panel') && b.offsetParent)
         .find(b => {
           const t = b.textContent?.trim().toLowerCase() || '';
-          return (t.includes('got it') || t.includes('continue earning') || t.includes('ok') || t.includes('next') || t.includes('confirm')) && !b.disabled && b.textContent?.trim() !== 'Cash Out';
+          return (t.includes('got it') || t.includes('continue earning') || t.includes('ok') || t.includes('next') || t.includes('confirm') || t.includes('maybe later') || t.includes('share')) && !b.disabled && b.textContent?.trim() !== 'Cash Out';
         });
       if (btn) { log('Cashout modal:', btn.textContent.trim()); btn.click(); await sleep(1000); }
     }
@@ -400,6 +419,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
     await completeTask(110, 'Instagram');    // Bind Instagram
     st('s2', 'running', 'Mock Call 凑收益...');
     await runMockCalls(5); // 5 × $0.6 = $3.0 > $2.10
+    removeAutoAccept();
     st('s2', 'running', '提现 $7.00...');
     await sleep(2000);
     await doCashout();
@@ -412,6 +432,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
     await completeTask(135, 'Location'); // Location Permission App
     st('s3', 'running', 'Mock Call 凑收益...');
     await runMockCalls(15); // 15 × $0.6 = $9.0 > $8
+    removeAutoAccept();
     st('s3', 'running', '提现 $8.00...');
     await sleep(2000);
     await doCashout();
@@ -422,6 +443,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
   async function stepStage4() {
     st('s4', 'running', 'Mock Call 凑收益...');
     await runMockCalls(18); // 18 × $0.6 = $10.8 > $10, duration also accumulates
+    removeAutoAccept();
     st('s4', 'running', '提现 $12.00...');
     await sleep(2000);
     await doCashout();
@@ -432,6 +454,7 @@ console.log('%c[AutoBot:boot]', 'color:#ff5722;font-weight:bold', 'v3 entry', lo
   async function stepStage5() {
     st('s5', 'running', 'Mock Call 凑收益...');
     await runMockCalls(35); // 35 × $0.6 = $21.0 > $20, duration also accumulates
+    removeAutoAccept();
     st('s5', 'running', '提现 $25.00...');
     await sleep(2000);
     await doCashout();
