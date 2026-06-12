@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "copy": "cp dist/autobot.global.js ../sitin-next/packages/app-pwa/public/autobot.js && echo 'Copied to PWA'",
+    "copy": "cp dist/autobot.js ../sitin-next/packages/app-pwa/public/autobot.js && echo 'Copied to PWA'",
     "deploy": "pnpm build && pnpm copy"
   },
   "devDependencies": {

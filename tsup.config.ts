@@ -12,4 +12,8 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   noExternal: [/.*/],
+  esbuildOptions(options) {
+    options.outfile = 'dist/autobot.js';
+    delete options.outdir;
+  },
 });
