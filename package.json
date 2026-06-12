@@ -1,0 +1,16 @@
+{
+  "name": "sitin-pwa-automation",
+  "version": "3.1.0",
+  "private": true,
+  "description": "PWA automation: record-and-replay + preset stage flows",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "copy": "cp dist/autobot.global.js ../sitin-next/packages/app-pwa/public/autobot.js && echo 'Copied to PWA'",
+    "deploy": "pnpm build && pnpm copy"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0"
+  }
+}
