@@ -8,6 +8,10 @@ import {
   getAllLocalSuites, saveLocalSuite, deleteLocalSuite,
   importSuiteFromJSON, copySuiteToClipboard, downloadSuiteAsFile,
 } from './repository';
+import {
+  getDeviceId, setDeviceId, getOnlineDevices, sendCommand, getCommands,
+  startRemote, stopRemote, type DeviceInfo, type RemoteCommand,
+} from './remote';
 import type { TestSuite, TestManifest, ProjectEntry, TestReport } from './types';
 
 function esc(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -90,6 +94,7 @@ async function renderTestingPanel(container: HTMLElement) {
   const remoteHTML = renderRemoteSuites();
   const localHTML = renderLocalSuites(localSuites);
   const resultsHTML = renderResults();
+  const deviceId = getDeviceId();
 
   container.innerHTML = `
     <div class="grp" id="grp-testing">
@@ -123,18 +128,59 @@ async function renderTestingPanel(container: HTMLElement) {
         </div>` : ''}
       </div></div>
     </div>
+
+    <div class="grp" id="grp-remote">
+      <div class="grp-hdr" data-grp="remote"><span>📡 Remote</span><span class="arr">▶</span></div>
+      <div class="grp-body"><div class="inner">
+        <div class="row" style="gap:4px;align-items:center">
+          <span style="font-size:10px;color:#888;white-space:nowrap">Device:</span>
+          <input id="remote-device-id" value="${esc(deviceId)}" style="flex:1;padding:3px 6px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;font-size:10px">
+          <button type="button" id="remote-save-id" style="padding:3px 8px;font-size:10px">Save</button>
+        </div>
+        <div style="font-size:10px;color:#69db7c;margin:4px 0">🟢 Online — listening for commands</div>
+
+        <div style="margin-top:6px;border-top:1px solid #333;padding-top:4px">
+          <div class="row" style="gap:4px;margin-bottom:4px">
+            <span style="font-size:10px;color:#888">Online devices:</span>
+            <button type="button" id="remote-refresh-devices" style="padding:2px 6px;font-size:9px">🔄</button>
+          </div>
+          <div id="remote-device-list" style="font-size:10px;color:#666">Loading...</div>
+        </div>
+
+        <div style="margin-top:6px;border-top:1px solid #333;padding-top:4px">
+          <div style="font-size:10px;color:#888;margin-bottom:4px">Send command:</div>
+          <div class="row" style="gap:4px">
+            <select id="remote-target" style="flex:1;padding:3px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;font-size:10px">
+              <option value="">-- target --</option>
+            </select>
+            <select id="remote-suite" style="flex:1;padding:3px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;font-size:10px">
+              <option value="">-- suite --</option>
+              ${(manifest?.projects.find(p => p.id === configManager.getProject())?.suites ?? [])
+                .map(s => `<option value="${esc(s.file)}">${esc(s.name)}</option>`).join('')}
+            </select>
+          </div>
+          <button type="button" id="remote-send-cmd" class="accent wide" style="font-size:10px;margin-top:4px">Run on target</button>
+        </div>
+
+        <div style="margin-top:6px;border-top:1px solid #333;padding-top:4px">
+          <div style="font-size:10px;color:#888;margin-bottom:4px">Recent commands:</div>
+          <div id="remote-cmd-list" style="font-size:10px;color:#666">Loading...</div>
+        </div>
+      </div></div>
+    </div>
   `;
 
   bindEvents(container, localSuites);
 }
 
 function bindEvents(container: HTMLElement, localSuites: TestSuite[]) {
-  const grpHdr = container.querySelector('.grp-hdr');
-  grpHdr?.addEventListener('click', () => {
-    const body = grpHdr.nextElementSibling as HTMLElement;
-    const arr = grpHdr.querySelector('.arr') as HTMLElement;
-    body.classList.toggle('open');
-    arr.classList.toggle('open');
+  container.querySelectorAll('.grp-hdr').forEach(grpHdr => {
+    grpHdr.addEventListener('click', () => {
+      const body = grpHdr.nextElementSibling as HTMLElement;
+      const arr = grpHdr.querySelector('.arr') as HTMLElement;
+      body.classList.toggle('open');
+      arr.classList.toggle('open');
+    });
   });
 
   container.querySelector('#test-project-select')?.addEventListener('change', async (e) => {
@@ -241,6 +287,76 @@ function bindEvents(container: HTMLElement, localSuites: TestSuite[]) {
   container.querySelector('#test-export-report-btn')?.addEventListener('click', () => {
     if (lastReport) downloadReport(lastReport);
   });
+
+  // ── Remote control events ──
+  container.querySelector('#remote-save-id')?.addEventListener('click', () => {
+    const input = container.querySelector('#remote-device-id') as HTMLInputElement;
+    if (input?.value.trim()) {
+      setDeviceId(input.value.trim());
+      stopRemote();
+      startRemote();
+      log('Device ID saved:', input.value.trim());
+    }
+  });
+
+  container.querySelector('#remote-refresh-devices')?.addEventListener('click', () => refreshDeviceList(container));
+
+  container.querySelector('#remote-send-cmd')?.addEventListener('click', async () => {
+    const target = (container.querySelector('#remote-target') as HTMLSelectElement)?.value;
+    const suite = (container.querySelector('#remote-suite') as HTMLSelectElement)?.value;
+    const project = configManager.getProject();
+    if (!target || !suite || !project) { alert('Select target device and suite'); return; }
+    await sendCommand(target, project, suite);
+    log('Command sent to', target);
+    await refreshCommandList(container);
+  });
+
+  refreshDeviceList(container);
+  refreshCommandList(container);
+}
+
+async function refreshDeviceList(container: HTMLElement): Promise<void> {
+  const listEl = container.querySelector('#remote-device-list');
+  const selectEl = container.querySelector('#remote-target') as HTMLSelectElement | null;
+  if (!listEl) return;
+
+  const devices = await getOnlineDevices();
+  const myId = getDeviceId();
+
+  if (devices.length === 0) {
+    listEl.innerHTML = '<div style="color:#666">No devices online</div>';
+  } else {
+    listEl.innerHTML = devices.map(d => {
+      const isMe = d.deviceId === myId;
+      return `<div style="margin:2px 0;color:${isMe ? '#69db7c' : '#eee'}">
+        📱 ${esc(d.deviceId)} ${d.project ? `(${esc(d.project)})` : ''} ${isMe ? '← you' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  if (selectEl) {
+    const current = selectEl.value;
+    const others = devices.filter(d => d.deviceId !== myId);
+    selectEl.innerHTML = `<option value="">-- target --</option>` +
+      others.map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === current ? 'selected' : ''}>${esc(d.deviceId)}</option>`).join('');
+  }
+}
+
+async function refreshCommandList(container: HTMLElement): Promise<void> {
+  const listEl = container.querySelector('#remote-cmd-list');
+  if (!listEl) return;
+
+  const commands = await getCommands();
+  if (commands.length === 0) {
+    listEl.innerHTML = '<div style="color:#666">No commands</div>';
+    return;
+  }
+
+  listEl.innerHTML = commands.slice(0, 10).map(cmd => {
+    const icon = cmd.status === 'completed' ? '✅' : cmd.status === 'failed' ? '❌' : cmd.status === 'running' ? '⏳' : '⏸️';
+    const time = new Date(cmd.createdAt).toLocaleTimeString();
+    return `<div style="margin:2px 0">${icon} ${esc(cmd.targetDevice)} → ${esc(cmd.suite)} <span style="color:#666">${time}</span></div>`;
+  }).join('');
 }
 
 async function executeSuite(suite: TestSuite, container: HTMLElement) {
