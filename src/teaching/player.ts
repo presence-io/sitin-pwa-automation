@@ -34,12 +34,18 @@ export function findByLocator(locator: Locator, tag: string): Element | null {
         if (!isVisible(el) || isAutobotElement(el)) continue;
         if (el.textContent?.trim() === locator.value) return el;
       }
-      // contains match
+      // contains match — prefer the smallest (most specific) element
+      let best: Element | null = null;
+      let bestLen = Infinity;
       for (const el of candidates) {
         if (!isVisible(el) || isAutobotElement(el)) continue;
-        if (el.textContent?.trim().includes(locator.value)) return el;
+        const t = el.textContent?.trim() || '';
+        if (t.includes(locator.value) && t.length < bestLen) {
+          best = el;
+          bestLen = t.length;
+        }
       }
-      return null;
+      return best;
     }
     case 'placeholder': {
       const el = document.querySelector(`[placeholder="${locator.value}"]`);

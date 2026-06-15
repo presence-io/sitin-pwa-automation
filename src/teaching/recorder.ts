@@ -21,6 +21,39 @@ function getClickableAncestor(el: Element): Element {
   return el;
 }
 
+// Extract the most stable text from an element for locator matching.
+// For list items, walk direct children to find the primary label (e.g. username)
+// while skipping dynamic parts (timestamps, counters, badges).
+function extractStableText(el: Element): string | null {
+  // Try to find text from the first few leaf children — they're typically
+  // the primary label (name, title) rather than metadata (time, count)
+  const candidates: string[] = [];
+  const walk = (node: Element, depth: number) => {
+    if (depth > 4 || candidates.length >= 3) return;
+    if (node.children.length === 0) {
+      const t = node.textContent?.trim();
+      if (t && t.length >= 2 && t.length < 60 && !looksLikeTimestamp(t)) {
+        candidates.push(t);
+      }
+    } else {
+      for (let i = 0; i < Math.min(node.children.length, 5); i++) {
+        walk(node.children[i], depth + 1);
+      }
+    }
+  };
+  walk(el, 0);
+
+  // Return the first non-timestamp candidate (usually the name/title)
+  return candidates[0] || null;
+}
+
+function looksLikeTimestamp(s: string): boolean {
+  // Match common time patterns: "16:02", "3:45 PM", "2m", "1h", "Yesterday"
+  return /^\d{1,2}:\d{2}/.test(s)
+    || /^\d+[smh]$/.test(s)
+    || /^(just now|yesterday|today|\d+ (min|sec|hour|day))/i.test(s);
+}
+
 function generateLocators(el: Element): Locator[] {
   const locators: Locator[] = [];
 
@@ -48,16 +81,13 @@ function generateLocators(el: Element): Locator[] {
     }
   }
 
-  // For non-clickable elements (e.g. list items), still generate a text locator
-  // using a shorter excerpt to handle dynamic content like timestamps
+  // For non-clickable elements (e.g. list items), generate a text locator
+  // by finding the most stable text from child elements, avoiding dynamic
+  // content like timestamps
   if (!isClickable && el.textContent) {
-    const full = el.textContent.trim();
-    if (full.length > 0 && full.length < 200) {
-      // Extract the first meaningful line (likely a name/title) as locator
-      const firstLine = full.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)[0];
-      if (firstLine && firstLine.length < 80) {
-        locators.push({ type: 'text', value: firstLine });
-      }
+    const stableText = extractStableText(el);
+    if (stableText && stableText.length >= 2 && stableText.length < 80) {
+      locators.push({ type: 'text', value: stableText });
     }
   }
 
