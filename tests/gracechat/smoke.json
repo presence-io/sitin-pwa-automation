@@ -1,0 +1,29 @@
+{
+  "name": "GraceChat Smoke Tests",
+  "cases": [
+    {
+      "name": "Quick Login",
+      "tags": ["smoke", "login"],
+      "setup": [
+        { "action": "call", "fn": "clearLocalStorage" }
+      ],
+      "steps": [
+        { "action": "navigate", "url": "/login" },
+        { "action": "wait", "delay": 2000 },
+        { "action": "click", "locators": [{ "type": "text", "value": "Quick Login" }], "tag": "button" },
+        { "action": "wait", "delay": 3000 },
+        { "action": "assert", "assertType": "url", "expected": "/onboarding", "timeout": 10000 },
+        { "action": "assert", "assertType": "eventFired", "sdk": "rangers", "event": "login_success", "timeout": 5000 }
+      ]
+    },
+    {
+      "name": "Homepage loads after login",
+      "tags": ["smoke"],
+      "steps": [
+        { "action": "navigate", "url": "/" },
+        { "action": "wait", "delay": 2000 },
+        { "action": "assert", "assertType": "textExists", "expected": "GraceChat", "timeout": 5000 }
+      ]
+    }
+  ]
+}

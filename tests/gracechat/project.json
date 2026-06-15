@@ -1,0 +1,29 @@
+{
+  "project": "gracechat",
+  "baseUrl": "https://gracechat.com",
+  "trackers": [
+    { "name": "rangers", "target": "window.collectEvent", "extractEvent": "args[0]", "extractParams": "args[1]" },
+    { "name": "tiktok", "target": "window.ttq.track", "extractEvent": "args[0]" },
+    { "name": "meta", "target": "window.fbq", "extractEvent": "args[1]" },
+    { "name": "appsflyer", "target": "window.AF", "extractEvent": "args[1]" }
+  ],
+  "cleanupFunctions": {
+    "deleteAccount": {
+      "type": "navigate-click",
+      "url": "/debug",
+      "clickText": "删除账户",
+      "confirmDialog": true
+    },
+    "clearLocalStorage": {
+      "type": "localStorage",
+      "preserveKeys": ["autobot_config", "autobot_enabled", "autobot_project"]
+    },
+    "resetState": {
+      "type": "custom",
+      "script": "await this.call('deleteAccount'); await this.call('clearLocalStorage');"
+    }
+  },
+  "panel": {
+    "title": "AutoBot — GraceChat"
+  }
+}

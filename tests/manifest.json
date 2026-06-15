@@ -1,0 +1,12 @@
+{
+  "projects": [
+    {
+      "id": "gracechat",
+      "name": "GraceChat PWA",
+      "description": "Social + earning PWA",
+      "suites": [
+        { "file": "smoke.json", "name": "Smoke Tests", "tags": ["smoke"] }
+      ]
+    }
+  ]
+}

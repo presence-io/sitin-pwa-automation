@@ -10,6 +10,7 @@ import {
   type StatusFn, type DisableAllFn,
 } from '../stages';
 import { createTeachingUI } from '../teaching/ui';
+import { createTestingUI } from '../testing/ui';
 import { CSS } from './styles';
 
 let panelEl: HTMLElement | null = null;
@@ -198,6 +199,7 @@ export function createPanel() {
       `)}
 
       <div id="teaching-section"></div>
+      <div id="testing-section"></div>
     </div>
   `;
   document.body.appendChild(p); panelEl = p;
@@ -246,6 +248,9 @@ export function createPanel() {
 
   // Teaching mode
   createTeachingUI(p.querySelector('#teaching-section')!);
+
+  // Testing mode
+  createTestingUI(p.querySelector('#testing-section')!);
 
   refreshInfo(); setInterval(refreshInfo, 3000);
   resumeS1(st, disableAll);

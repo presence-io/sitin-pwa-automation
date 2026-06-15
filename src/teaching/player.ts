@@ -11,7 +11,7 @@ function isAutobotElement(el: Element): boolean {
   return !!(el.closest('#autobot-panel') || el.closest('#autobot-fab') || el.closest('#autobot-minibar'));
 }
 
-function findByLocator(locator: Locator, tag: string): Element | null {
+export function findByLocator(locator: Locator, tag: string): Element | null {
   switch (locator.type) {
     case 'id': {
       const el = document.querySelector(locator.value);
@@ -62,7 +62,7 @@ function findByLocator(locator: Locator, tag: string): Element | null {
   }
 }
 
-function findElementByStep(step: RecordingStep): Element | null {
+export function findElementByStep(step: RecordingStep): Element | null {
   if (!step.locators || step.locators.length === 0) return null;
 
   for (const locator of step.locators) {
@@ -88,7 +88,7 @@ function findElementByStep(step: RecordingStep): Element | null {
   return null;
 }
 
-async function waitForElement(step: RecordingStep, timeoutMs = 10000): Promise<Element | null> {
+export async function waitForElement(step: RecordingStep, timeoutMs = 10000): Promise<Element | null> {
   const el = findElementByStep(step);
   if (el) return el;
 
@@ -102,6 +102,53 @@ async function waitForElement(step: RecordingStep, timeoutMs = 10000): Promise<E
     obs.observe(document.body, { childList: true, subtree: true, attributes: true });
     setTimeout(() => { obs.disconnect(); resolve(findElementByStep(step)); }, timeoutMs);
   });
+}
+
+export async function executeStepAction(step: RecordingStep): Promise<boolean> {
+  switch (step.type) {
+    case 'navigate':
+      if (step.url) spaNav(step.url);
+      await sleep(1500);
+      return true;
+
+    case 'click': {
+      const el = await waitForElement(step);
+      if (!el) return false;
+      (el as HTMLElement).click();
+      await sleep(500);
+      return true;
+    }
+
+    case 'input': {
+      const el = await waitForElement(step);
+      if (!el) return false;
+      const inp = el as HTMLInputElement;
+      inp.focus();
+      if (step.value !== undefined) {
+        await typeInto(inp, step.value);
+      }
+      return true;
+    }
+
+    case 'select': {
+      const el = await waitForElement(step);
+      if (!el) return false;
+      const sel = el as HTMLSelectElement;
+      if (step.value !== undefined) {
+        sel.value = step.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return true;
+    }
+
+    case 'scroll':
+      window.scrollTo(step.scrollX || 0, step.scrollY || 0);
+      return true;
+
+    default:
+      warn('Unknown step type:', step.type);
+      return false;
+  }
 }
 
 export class Player {
@@ -161,49 +208,6 @@ export class Player {
   }
 
   private async executeStep(step: RecordingStep): Promise<boolean> {
-    switch (step.type) {
-      case 'navigate':
-        if (step.url) spaNav(step.url);
-        await sleep(1500);
-        return true;
-
-      case 'click': {
-        const el = await waitForElement(step);
-        if (!el) return false;
-        (el as HTMLElement).click();
-        await sleep(500);
-        return true;
-      }
-
-      case 'input': {
-        const el = await waitForElement(step);
-        if (!el) return false;
-        const inp = el as HTMLInputElement;
-        inp.focus();
-        if (step.value !== undefined) {
-          await typeInto(inp, step.value);
-        }
-        return true;
-      }
-
-      case 'select': {
-        const el = await waitForElement(step);
-        if (!el) return false;
-        const sel = el as HTMLSelectElement;
-        if (step.value !== undefined) {
-          sel.value = step.value;
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        return true;
-      }
-
-      case 'scroll':
-        window.scrollTo(step.scrollX || 0, step.scrollY || 0);
-        return true;
-
-      default:
-        warn('Unknown step type:', step.type);
-        return false;
-    }
+    return executeStepAction(step);
   }
 }
