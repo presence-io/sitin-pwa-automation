@@ -1,11 +1,12 @@
 import { log, warn } from '../core/helpers';
-import { Recorder } from './recorder';
+import { Recorder, type AssertStep } from './recorder';
 import { Player } from './player';
 import {
   saveRecording, getAllRecordings, deleteRecording, exportRecordingsJSON, importAndSaveJSON,
   type Recording, type RecordingStep,
 } from './store';
 import { saveLocalSuite } from '../testing/repository';
+import { tracker } from '../testing/tracker';
 import type { TestSuite, TestAction } from '../testing/types';
 
 const recorder = new Recorder();
@@ -108,6 +109,12 @@ export function createTeachingUI(container: Element) {
     collapsePanel();
     const bar = showMinibar('recording');
     updateMinibarLabel('录制中 · 0 步');
+
+    const assertBtn = document.createElement('button');
+    assertBtn.className = 'btn-pause'; assertBtn.textContent = '+断言';
+    assertBtn.addEventListener('click', () => showAssertPopup(bar));
+    bar.appendChild(assertBtn);
+
     const stopBtn = document.createElement('button');
     stopBtn.className = 'btn-stop'; stopBtn.textContent = '停止';
     stopBtn.addEventListener('click', () => btnStop.click());
@@ -193,6 +200,77 @@ export function createTeachingUI(container: Element) {
     updateRecStatus(`已导出 ${all.length} 条`);
   });
 
+  // ── Assert popup during recording ──
+  function showAssertPopup(bar: HTMLElement) {
+    let popup = document.getElementById('autobot-assert-popup');
+    if (popup) { popup.remove(); return; }
+
+    popup = document.createElement('div');
+    popup.id = 'autobot-assert-popup';
+    popup.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #00bcd4;border-radius:8px;padding:10px;z-index:999999;font-family:-apple-system,sans-serif;font-size:12px;color:#eee;box-shadow:0 4px 16px rgba(0,0,0,.4);min-width:240px';
+
+    const currentUrl = location.pathname + location.search;
+    const bodyText = document.body.innerText.slice(0, 500);
+    const events = tracker.getEvents();
+    const recentEvents = events.slice(-10);
+
+    popup.innerHTML = `
+      <div style="font-weight:600;margin-bottom:8px;color:#00bcd4">插入断言</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button data-assert="url" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
+          🔗 URL 包含 <span style="color:#888">${escHTML(currentUrl)}</span>
+        </button>
+        <button data-assert="text-prompt" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
+          📝 文案存在（手动输入）
+        </button>
+        <button data-assert="text-not" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
+          🚫 文案不存在（手动输入）
+        </button>
+        ${recentEvents.length > 0 ? `
+          <div style="font-size:10px;color:#888;margin-top:4px;border-top:1px solid #333;padding-top:4px">最近埋点事件:</div>
+          ${recentEvents.map(ev => `
+            <button data-assert="event" data-sdk="${escHTML(ev.sdk)}" data-event="${escHTML(ev.event)}" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
+              📊 ${escHTML(ev.sdk)}: <span style="color:#ffeb3b">${escHTML(ev.event)}</span>
+            </button>
+          `).join('')}
+        ` : '<div style="font-size:10px;color:#666;margin-top:4px">暂无埋点事件</div>'}
+      </div>
+      <button id="assert-popup-close" style="margin-top:8px;padding:4px 8px;background:none;border:1px solid #444;border-radius:4px;color:#888;cursor:pointer;font-size:10px;width:100%">取消</button>
+    `;
+
+    document.body.appendChild(popup);
+
+    popup.querySelector('#assert-popup-close')!.addEventListener('click', () => popup!.remove());
+
+    popup.querySelectorAll('[data-assert]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = (btn as HTMLElement).dataset.assert!;
+        let assert: AssertStep | null = null;
+
+        if (type === 'url') {
+          assert = { type: 'assert', assertType: 'url', expected: currentUrl };
+        } else if (type === 'text-prompt') {
+          const text = prompt('输入期望存在的文案:');
+          if (text) assert = { type: 'assert', assertType: 'textExists', expected: text };
+        } else if (type === 'text-not') {
+          const text = prompt('输入不应出现的文案:');
+          if (text) assert = { type: 'assert', assertType: 'textNotExists', expected: text };
+        } else if (type === 'event') {
+          const sdk = (btn as HTMLElement).dataset.sdk!;
+          const event = (btn as HTMLElement).dataset.event!;
+          assert = { type: 'assert', assertType: 'eventFired', sdk, event };
+        }
+
+        if (assert) {
+          recorder.insertAssert(assert);
+          updateMinibarLabel(`录制中 · ${recorder.stepCount} 步 (含断言)`);
+          log('Assert inserted:', assert.assertType, assert.expected || assert.event || '');
+        }
+        popup!.remove();
+      });
+    });
+  }
+
   // ── Saved list ──
   async function refreshSavedList() {
     const all = await getAllRecordings();
@@ -246,7 +324,17 @@ export function createTeachingUI(container: Element) {
 
   function recordingToTestSuite(rec: Recording): TestSuite {
     const steps: TestAction[] = rec.steps.map(s => {
-      const action: TestAction = {
+      if (s.type === 'assert') {
+        return {
+          action: 'assert' as const,
+          assertType: s.assertType as any,
+          expected: s.expected,
+          sdk: s.sdk,
+          event: s.event,
+          timeout: 5000,
+        };
+      }
+      return {
         action: s.type as TestAction['action'],
         locators: s.locators,
         tag: s.tag,
@@ -256,7 +344,6 @@ export function createTeachingUI(container: Element) {
         scrollX: s.scrollX,
         scrollY: s.scrollY,
       };
-      return action;
     });
 
     // Auto-insert URL assertion after navigate steps

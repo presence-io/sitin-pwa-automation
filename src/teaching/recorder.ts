@@ -102,6 +102,14 @@ function generateLocators(el: Element): Locator[] {
 
 export type OnStepCallback = (step: RecordingStep) => void;
 
+export interface AssertStep {
+  type: 'assert';
+  assertType: string;
+  expected?: string;
+  sdk?: string;
+  event?: string;
+}
+
 export class Recorder {
   private steps: RecordingStep[] = [];
   private recording = false;
@@ -113,6 +121,21 @@ export class Recorder {
   get isRecording() { return this.recording; }
   get stepCount() { return this.steps.length; }
   getSteps() { return [...this.steps]; }
+
+  insertAssert(assert: AssertStep) {
+    if (!this.recording) return;
+    const step: RecordingStep = {
+      type: 'assert' as any,
+      locators: [],
+      tag: '',
+      delay: 0,
+      assertType: assert.assertType,
+      expected: assert.expected,
+      sdk: assert.sdk,
+      event: assert.event,
+    };
+    this.addStep(step);
+  }
 
   start(onStep?: OnStepCallback) {
     if (this.recording) return;

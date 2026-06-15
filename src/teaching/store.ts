@@ -10,7 +10,7 @@ export interface Locator {
 }
 
 export interface RecordingStep {
-  type: 'click' | 'input' | 'navigate' | 'select' | 'scroll';
+  type: 'click' | 'input' | 'navigate' | 'select' | 'scroll' | 'assert';
   locators: Locator[];
   tag: string;
   textHint?: string;
@@ -19,6 +19,10 @@ export interface RecordingStep {
   delay: number;
   scrollX?: number;
   scrollY?: number;
+  assertType?: string;
+  expected?: string;
+  sdk?: string;
+  event?: string;
 }
 
 export interface Recording {

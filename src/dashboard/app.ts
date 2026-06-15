@@ -412,6 +412,154 @@ function showScreenModal(deviceId: string): void {
   });
 }
 
+function showAIGenerate(): void {
+  const projectId = state.project || 'your-project';
+  const projectEntry = state.manifest?.projects?.find((p: any) => p.id === state.project);
+  const projectName = projectEntry?.name || projectId;
+
+  // Build context from current project config
+  const sampleSuite = state.suites[0];
+  const sampleJSON = sampleSuite ? JSON.stringify(sampleSuite.cases[0] || {}, null, 2).slice(0, 500) : '(no sample available)';
+
+  const container = document.getElementById('modal-container')!;
+  container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
+    <div class="modal" style="max-width:700px">
+      <div class="modal-hdr"><h3>✨ AI Generate Test Case</h3><button class="close" id="modal-close">✕</button></div>
+      <div class="modal-body">
+        <p style="color:#8b949e;margin-bottom:12px;font-size:13px">Describe the test scenario, then generate a prompt with project context to send to Claude/ChatGPT.</p>
+
+        <label style="font-size:12px;font-weight:600;color:#e6edf3;display:block;margin-bottom:4px">Project: ${esc(projectName)}</label>
+
+        <label style="font-size:12px;color:#8b949e;display:block;margin:12px 0 4px">Test scenario description:</label>
+        <textarea id="ai-scenario" placeholder="e.g. Test the user registration flow: open /login, click Quick Login, complete onboarding with username and age, verify redirected to /home and rangers login_success event fires" style="width:100%;min-height:100px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-size:12px;resize:vertical;font-family:inherit"></textarea>
+
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button id="ai-gen-prompt" style="padding:8px 16px;background:#238636;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Generate Prompt</button>
+          <span id="ai-status" style="font-size:12px;color:#8b949e;line-height:36px"></span>
+        </div>
+
+        <div id="ai-prompt-area" style="display:none;margin-top:12px">
+          <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px">Generated prompt (copy to Claude/ChatGPT):</label>
+          <textarea id="ai-prompt-output" readonly style="width:100%;min-height:200px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical"></textarea>
+          <button id="ai-copy-prompt" style="margin-top:8px;padding:6px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:12px;cursor:pointer">📋 Copy to clipboard</button>
+        </div>
+
+        <div style="margin-top:16px;border-top:1px solid #30363d;padding-top:12px">
+          <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px">Paste AI-generated JSON here:</label>
+          <textarea id="ai-json-input" placeholder='{ "name": "...", "cases": [...] }' style="width:100%;min-height:100px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="ai-import-json" style="padding:8px 16px;background:#238636;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Import & Add to Library</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  container.querySelector('#modal-close')!.addEventListener('click', closeModal);
+  container.querySelector('#modal-overlay')!.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'modal-overlay') closeModal();
+  });
+
+  container.querySelector('#ai-gen-prompt')!.addEventListener('click', () => {
+    const scenario = (document.getElementById('ai-scenario') as HTMLTextAreaElement).value.trim();
+    if (!scenario) { document.getElementById('ai-status')!.textContent = 'Please describe a scenario first'; return; }
+
+    const prompt = buildAIPrompt(projectId, scenario, sampleJSON);
+    const outputArea = document.getElementById('ai-prompt-output') as HTMLTextAreaElement;
+    outputArea.value = prompt;
+    document.getElementById('ai-prompt-area')!.style.display = 'block';
+    document.getElementById('ai-status')!.textContent = 'Prompt generated — copy and send to AI';
+  });
+
+  container.querySelector('#ai-copy-prompt')!.addEventListener('click', () => {
+    const text = (document.getElementById('ai-prompt-output') as HTMLTextAreaElement).value;
+    navigator.clipboard.writeText(text);
+    (container.querySelector('#ai-copy-prompt') as HTMLElement).textContent = '✅ Copied!';
+    setTimeout(() => { (container.querySelector('#ai-copy-prompt') as HTMLElement).textContent = '📋 Copy to clipboard'; }, 2000);
+  });
+
+  container.querySelector('#ai-import-json')!.addEventListener('click', () => {
+    const text = (document.getElementById('ai-json-input') as HTMLTextAreaElement).value.trim();
+    if (!text) return;
+    try {
+      const suite = JSON.parse(text);
+      if (!suite.name || !Array.isArray(suite.cases)) { alert('Invalid format: need name + cases[]'); return; }
+      state.suites.push({ ...suite, _file: '', _remoteName: `[AI] ${suite.name}` });
+      renderSuites();
+      updateRunButton();
+      closeModal();
+    } catch { alert('Invalid JSON'); }
+  });
+}
+
+function buildAIPrompt(projectId: string, scenario: string, sampleJSON: string): string {
+  return `You are an automation testing expert. Generate a test suite JSON for the AutoBot testing framework.
+
+## Project: ${projectId}
+
+## Test Scenario
+${scenario}
+
+## TestSuite JSON Format
+
+\`\`\`typescript
+interface TestSuite {
+  name: string;
+  cases: TestCase[];
+}
+
+interface TestCase {
+  name: string;
+  tags?: string[];         // e.g. ["smoke", "regression"]
+  variables?: Record<string, string>;  // supports {{random:prefix_}}, {{timestamp}}
+  setup?: TestAction[];    // pre-test cleanup
+  steps: TestAction[];     // test steps
+  teardown?: TestAction[]; // post-test cleanup
+  teardownOnFail?: boolean; // default true
+}
+
+interface TestAction {
+  action: 'click' | 'input' | 'select' | 'navigate' | 'scroll' | 'assert' | 'wait' | 'call';
+  // Element locators (for click/input/select):
+  locators?: Array<{ type: 'id' | 'testid' | 'aria' | 'text' | 'placeholder' | 'css'; value: string }>;
+  tag?: string;          // element tag: 'button', 'input', 'div', etc.
+  value?: string;        // for input action
+  url?: string;          // for navigate action
+  delay?: number;        // for wait action (ms)
+  fn?: string;           // for call action: 'deleteAccount', 'clearLocalStorage', 'resetState'
+  timeout?: number;      // step timeout (default 10000ms)
+  // Assert params:
+  assertType?: 'url' | 'textExists' | 'textNotExists' | 'elementExists' | 'elementNotExists'
+             | 'eventFired' | 'eventNotFired' | 'eventParams' | 'eventCount'
+             | 'localStorage' | 'cookie' | 'jsExpression';
+  expected?: string;
+  sdk?: string;          // tracker SDK name for event assertions
+  event?: string;        // event name for event assertions
+  key?: string;          // param key for eventParams / localStorage / cookie
+}
+\`\`\`
+
+## Locator Priority (prefer text/placeholder over css):
+1. text — button/link text content: \`{ "type": "text", "value": "Sign In" }\`
+2. placeholder — input placeholder: \`{ "type": "placeholder", "value": "Enter email" }\`
+3. aria — aria-label: \`{ "type": "aria", "value": "Close" }\`
+4. testid — data-testid: \`{ "type": "testid", "value": "submit-btn" }\`
+5. css — CSS selector (last resort): \`{ "type": "css", "value": "#login-form button" }\`
+
+## Sample from this project:
+\`\`\`json
+${sampleJSON}
+\`\`\`
+
+## Requirements:
+1. Output valid JSON only, no explanation
+2. Use text/placeholder locators primarily (more stable than CSS)
+3. Add assertions after key operations (URL checks, text existence, event tracking)
+4. Include setup/teardown if the scenario involves user state
+5. Use {{random:prefix_}} for generated usernames/emails
+6. Use the "call" action for cleanup functions like "deleteAccount", "clearLocalStorage"`;
+}
+
 function showConnectHelp(): void {
   const script = `fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})`;
   showModal('Add Device', `
@@ -490,6 +638,7 @@ async function init(): Promise<void> {
   document.getElementById('btn-run')!.addEventListener('click', runOnDevices);
   document.getElementById('btn-connect-help')!.addEventListener('click', showConnectHelp);
   document.getElementById('btn-paste')!.addEventListener('click', showPasteModal);
+  document.getElementById('btn-ai-gen')!.addEventListener('click', showAIGenerate);
 
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   document.getElementById('btn-import')!.addEventListener('click', () => fileInput.click());
