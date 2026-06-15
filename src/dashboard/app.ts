@@ -1088,10 +1088,31 @@ function updateRunButton(): void {
 
 // ── Init ──
 
+async function restoreLastResults(): Promise<void> {
+  if (state.history.length === 0) return;
+  // Find the most recent command that has results
+  for (const cmd of state.history) {
+    const data = await fbGet<Record<string, any>>(`results/${cmd.id}`);
+    if (data && Object.keys(data).length > 0) {
+      state.activeCmd = cmd.id;
+      state.results = new Map(Object.entries(data));
+      renderResults();
+      // If still running, keep listening
+      if (cmd.status === 'running') {
+        startResultsListener(cmd.id);
+      }
+      break;
+    }
+  }
+}
+
 async function init(): Promise<void> {
   startDeviceListener();
   await loadSuites();
   await refreshHistory();
+
+  // Restore last active command results from Firebase
+  await restoreLastResults();
 
   // Event bindings
   document.getElementById('project-select')!.addEventListener('change', async (e) => {
