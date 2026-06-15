@@ -5,16 +5,54 @@ import { getDeviceId } from './remote';
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let syncSource: EventSource | null = null;
 
-async function capture(): Promise<string | null> {
+async function captureAndUpload(): Promise<void> {
+  const deviceId = getDeviceId();
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const url = location.pathname + location.search;
+  const title = document.title;
+
+  // Collect visible text summary for dashboard display
+  const visibleText = document.body.innerText.slice(0, 300).replace(/\s+/g, ' ').trim();
+
+  const payload: any = {
+    width: w,
+    height: h,
+    url,
+    title,
+    visibleText,
+    timestamp: Date.now(),
+  };
+
+  // Try Canvas screenshot — works on same-origin pages without cross-origin images
+  const image = await captureCanvas();
+  if (image) {
+    payload.image = image;
+  }
+
+  await fbPut(`screens/${deviceId}`, payload);
+}
+
+async function captureCanvas(): Promise<string | null> {
   try {
-    const canvas = document.createElement('canvas');
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
 
+    // Draw page background
+    const bgColor = window.getComputedStyle(document.body).backgroundColor || '#fff';
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, h);
+
+    // Try foreignObject approach
     const clone = document.documentElement.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('#autobot-panel, #autobot-fab, #autobot-minibar, #__vconsole, .vc-mask').forEach(el => el.remove());
+    clone.querySelectorAll('#autobot-panel, #autobot-fab, #autobot-minibar, #__vconsole, .vc-mask, img, video, canvas').forEach(el => el.remove());
+
+    // Remove all external stylesheets that might cause taint
+    clone.querySelectorAll('link[rel="stylesheet"]').forEach(el => el.remove());
 
     const html = new XMLSerializer().serializeToString(clone);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
@@ -22,35 +60,26 @@ async function capture(): Promise<string | null> {
     </svg>`;
 
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    const blobUrl = URL.createObjectURL(blob);
 
     return new Promise<string | null>((resolve) => {
       const img = new Image();
       img.onload = () => {
-        canvas.getContext('2d')!.drawImage(img, 0, 0);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.3));
+        try {
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(blobUrl);
+          resolve(canvas.toDataURL('image/jpeg', 0.3).split(',')[1]);
+        } catch {
+          URL.revokeObjectURL(blobUrl);
+          resolve(null);
+        }
       };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-      img.src = url;
+      img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
+      img.src = blobUrl;
     });
   } catch {
     return null;
   }
-}
-
-async function captureAndUpload(): Promise<void> {
-  const image = await capture();
-  if (!image) return;
-  const base64 = image.split(',')[1];
-  const deviceId = getDeviceId();
-  await fbPut(`screens/${deviceId}`, {
-    image: base64,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    url: location.pathname + location.search,
-    timestamp: Date.now(),
-  });
 }
 
 function startSync(fps = 1): void {

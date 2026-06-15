@@ -391,9 +391,20 @@ function showScreenModal(deviceId: string): void {
   // SSE listen for screen updates
   const source = fbListen(`screens/${deviceId}`, async () => {
     const data = await fbGet<any>(`screens/${deviceId}`);
-    if (data?.image) {
+    if (!data) return;
+    if (data.image) {
       imgEl.src = `data:image/jpeg;base64,${data.image}`;
-      infoEl.textContent = `${data.width}×${data.height} · ${data.url || ''} · ${new Date(data.timestamp).toLocaleTimeString()}`;
+      imgEl.style.display = 'block';
+    } else {
+      imgEl.style.display = 'none';
+    }
+    const parts = [`${data.width}×${data.height}`, data.url || ''];
+    if (data.title) parts.push(data.title);
+    parts.push(new Date(data.timestamp).toLocaleTimeString());
+    infoEl.textContent = parts.join(' · ');
+    if (!data.image && data.visibleText) {
+      infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
+      infoEl.style.whiteSpace = 'pre-wrap';
     }
   });
 
