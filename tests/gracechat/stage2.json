@@ -1,0 +1,20 @@
+{
+  "name": "Stage 2 — 任务+Mock→提现 $7.00",
+  "cases": [
+    {
+      "name": "Stage 2 完整流程",
+      "tags": ["stage", "s2"],
+      "steps": [
+        { "action": "call", "fn": "completeTask", "args": [102, "Camera"] },
+        { "action": "call", "fn": "completeTask", "args": [103, "Microphone"] },
+        { "action": "call", "fn": "completeTask", "args": [105, "Location Access"] },
+        { "action": "call", "fn": "completeTask", "args": [112, "Install App"] },
+        { "action": "call", "fn": "completeTask", "args": [118, "Verify"] },
+        { "action": "call", "fn": "completeTask", "args": [110, "Instagram"] },
+        { "action": "call", "fn": "mockCallsAuto", "args": [2.1, 0] },
+        { "action": "wait", "delay": 2000 },
+        { "action": "call", "fn": "cashout" }
+      ]
+    }
+  ]
+}

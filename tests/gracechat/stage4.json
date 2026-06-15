@@ -1,0 +1,14 @@
+{
+  "name": "Stage 4 — Mock→提现 $12.00",
+  "cases": [
+    {
+      "name": "Stage 4 完整流程",
+      "tags": ["stage", "s4"],
+      "steps": [
+        { "action": "call", "fn": "mockCallsAuto", "args": [10, 2] },
+        { "action": "wait", "delay": 2000 },
+        { "action": "call", "fn": "cashout" }
+      ]
+    }
+  ]
+}

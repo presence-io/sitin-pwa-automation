@@ -5,7 +5,12 @@
       "name": "GraceChat PWA",
       "description": "Social + earning PWA",
       "suites": [
-        { "file": "smoke.json", "name": "Smoke Tests", "tags": ["smoke"] }
+        { "file": "smoke.json", "name": "Smoke Tests", "tags": ["smoke"] },
+        { "file": "stage1.json", "name": "Stage 1 — $0.50", "tags": ["stage", "s1"] },
+        { "file": "stage2.json", "name": "Stage 2 — $7.00", "tags": ["stage", "s2"] },
+        { "file": "stage3.json", "name": "Stage 3 — $8.00", "tags": ["stage", "s3"] },
+        { "file": "stage4.json", "name": "Stage 4 — $12.00", "tags": ["stage", "s4"] },
+        { "file": "stage5.json", "name": "Stage 5 — $25.00", "tags": ["stage", "s5"] }
       ]
     }
   ]

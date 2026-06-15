@@ -1,0 +1,15 @@
+{
+  "name": "Stage 3 — 任务+Mock→提现 $8.00",
+  "cases": [
+    {
+      "name": "Stage 3 完整流程",
+      "tags": ["stage", "s3"],
+      "steps": [
+        { "action": "call", "fn": "completeTask", "args": [135, "Location"] },
+        { "action": "call", "fn": "mockCallsAuto", "args": [8, 0] },
+        { "action": "wait", "delay": 2000 },
+        { "action": "call", "fn": "cashout" }
+      ]
+    }
+  ]
+}

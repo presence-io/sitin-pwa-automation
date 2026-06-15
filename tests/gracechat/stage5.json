@@ -1,0 +1,14 @@
+{
+  "name": "Stage 5 — Mock→提现 $25.00",
+  "cases": [
+    {
+      "name": "Stage 5 完整流程",
+      "tags": ["stage", "s5"],
+      "steps": [
+        { "action": "call", "fn": "mockCallsAuto", "args": [20, 5] },
+        { "action": "wait", "delay": 2000 },
+        { "action": "call", "fn": "cashout" }
+      ]
+    }
+  ]
+}

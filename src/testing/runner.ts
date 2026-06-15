@@ -46,7 +46,7 @@ async function runAction(action: TestAction, vars: Record<string, string>, stepI
         return { action: 'wait', status: 'ok', duration: Date.now() - start };
 
       case 'call':
-        await callCleanupFunction(resolved.fn!);
+        await callCleanupFunction(resolved.fn!, resolved.args);
         return { action: `call:${resolved.fn}`, status: 'ok', duration: Date.now() - start };
 
       case 'screenshot':
