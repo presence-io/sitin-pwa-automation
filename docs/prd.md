@@ -87,6 +87,7 @@ npx autobot-test run tests/smoke.json --url=https://your-app.com
 interface AutoBotConfig {
   project: string;                   // 项目标识
   baseUrl?: string;                  // 应用基础 URL（CLI 模式使用）
+  testsBaseUrl?: string;             // 远程用例仓库 URL（GitHub Pages 等）
 
   // 埋点 SDK 配置（可插拔）
   trackers?: TrackerConfig[];
@@ -301,36 +302,146 @@ TestSuite
 - 控制台（摘要，开发调试用）
 - 面板内（通过/失败状态 + 失败详情）
 
-#### F6: 面板 UI — 测试模式
+#### F6: 用例分享与分项目管理
 
-在面板中新增"测试模式"区域：
+用例需要能方便地分享给他人、按项目隔离管理、从远程加载。
+
+##### 6.1 分项目用例仓库
+
+用例按项目组织，存储在 Git 仓库的 `tests/` 目录下，通过 GitHub Pages 提供远程访问：
+
+```
+tests/
+├── manifest.json                    // 项目索引
+├── gracechat/
+│   ├── project.json                 // 项目配置（tracker、cleanup）
+│   ├── smoke.json                   // 冒烟测试套件
+│   ├── registration.json            // 注册流程
+│   └── cashout.json                 // 提现流程
+├── ecommerce-web/
+│   ├── project.json
+│   ├── checkout.json
+│   └── search.json
+└── admin-dashboard/
+    ├── project.json
+    └── login.json
+```
+
+**`manifest.json`（项目索引）：**
+```json
+{
+  "projects": [
+    {
+      "id": "gracechat",
+      "name": "GraceChat PWA",
+      "description": "社交+增长类 PWA",
+      "suites": [
+        { "file": "smoke.json", "name": "冒烟测试", "tags": ["smoke"] },
+        { "file": "registration.json", "name": "注册流程", "tags": ["registration"] },
+        { "file": "cashout.json", "name": "提现流程", "tags": ["cashout"] }
+      ]
+    },
+    {
+      "id": "ecommerce-web",
+      "name": "电商前台",
+      "suites": [...]
+    }
+  ]
+}
+```
+
+##### 6.2 注入时指定项目
+
+AutoBot 加载时通过参数指定当前项目，自动拉取对应的用例和配置：
+
+**方式 A：script 标签参数**
+```html
+<script>
+  if (localStorage.getItem('autobot_enabled') === '1') {
+    var s = document.createElement('script');
+    s.src = 'https://your-cdn.com/autobot.js';
+    s.dataset.project = 'gracechat';  // 指定项目
+    document.body.appendChild(s);
+  }
+</script>
+```
+
+**方式 B：localStorage 配置**
+```js
+localStorage.setItem('autobot_project', 'gracechat');
+```
+
+**方式 C：CLI 参数**
+```bash
+npx autobot-test run --project=gracechat --tag=smoke
+```
+
+加载流程：
+1. AutoBot 启动 → 读取 `project` 参数
+2. 拉取 `{baseUrl}/tests/manifest.json` → 获取项目列表
+3. 拉取 `{baseUrl}/tests/{project}/project.json` → 加载项目配置（tracker、cleanup）
+4. 拉取项目下的用例文件 → 展示在面板中
+
+##### 6.3 分享方式
+
+| 方式 | 适用场景 | 流程 |
+|------|---------|------|
+| **一键复制 JSON** | 即时分享 | 面板中点击 📋 → JSON 复制到剪贴板 → 飞书/Slack 粘贴 → 对方在面板粘贴导入 |
+| **导出文件** | 离线传递 | 面板中点击 ↓ → 下载 .json 文件 → 发送文件 → 对方导入 |
+| **提交到用例仓库** | 团队共享 | 将 JSON 提交到 `tests/{project}/` → CI 自动部署到 GitHub Pages → 所有人面板刷新可见 |
+| **分享链接** | 快速共享 | 上传到 Gist/Pastebin → 生成链接 → 对方在面板中粘贴链接导入 |
+
+##### 6.4 面板中的用例管理
 
 ```
 ┌─ 🧪 测试模式 ─────────────────────────────┐
 │                                            │
-│  ⬜ 导入用例  [选择文件]                     │
+│  项目: [GraceChat PWA ▼]  [🔄 刷新]        │
 │                                            │
-│  📋 用户注册流程 (5步 3断言)    [▶] [✕]     │
-│  📋 商品下单流程 (8步 4断言)    [▶] [✕]     │
-│  📋 搜索功能 (6步 2断言)       [▶] [✕]     │
+│  ─── 远程用例 ────────────────────────     │
+│  📋 冒烟测试 (3条)              [▶全部]    │
+│  📋 注册流程 (1条)              [▶]        │
+│  📋 提现流程 (1条)              [▶]        │
+│                                            │
+│  ─── 本地用例 ────────────────────────     │
+│  📝 我的录制_1 (5步)   [▶] [📋] [↓] [✕]   │
+│  📝 我的录制_2 (3步)   [▶] [📋] [↓] [✕]   │
+│                                            │
+│  [导入用例]  [粘贴JSON]                     │
 │                                            │
 │  ─── 批量 ────────────────────────────     │
 │  [全部执行]  标签: [smoke ▼]               │
 │                                            │
 │  ─── 结果 ────────────────────────────     │
 │  最近: 2/3 通过  [导出报告]                │
-│  ⚠ 商品下单 — 步骤4失败: 文案未找到        │
+│  ⚠ 提现流程 — 步骤4失败: 文案未找到        │
 │                                            │
 └────────────────────────────────────────────┘
 ```
 
-**交互流程：**
-1. 导入 JSON 用例文件 → 面板展示用例列表
-2. 点击单条 [▶] → 执行单个用例 → minibar 展示进度
-3. 点击 [全部执行] → 按标签过滤后批量执行
-4. 执行完成 → 面板展示通过/失败摘要
-5. 点击失败用例 → 展开失败步骤详情
-6. [导出报告] → 下载 JSON 报告文件
+**面板交互：**
+
+| 操作 | 说明 |
+|------|------|
+| **项目切换** | 下拉选择项目 → 重新拉取该项目的远程用例列表 |
+| **🔄 刷新** | 重新拉取 manifest.json + 项目用例，更新面板列表 |
+| **远程用例** | 从 GitHub Pages 拉取的共享用例，只读，可执行 |
+| **本地用例** | 用户自己录制/导入的，存在 IndexedDB，可编辑/删除 |
+| **📋 复制** | 一键复制用例 JSON 到剪贴板 |
+| **↓ 导出** | 下载用例为 .json 文件 |
+| **✕ 删除** | 删除本地用例（远程用例不可删除） |
+| **粘贴 JSON** | 弹出文本框 → 粘贴 JSON → 导入为本地用例 |
+| **导入用例** | 选择 .json 文件导入为本地用例 |
+
+**两类用例的区别：**
+
+| | 远程用例 | 本地用例 |
+|--|---------|---------|
+| 来源 | GitHub Pages 拉取 | 录制/导入/粘贴 |
+| 存储 | 不缓存，每次刷新拉取 | IndexedDB |
+| 操作 | 只能执行 | 可执行/复制/导出/删除 |
+| 共享 | 团队共享（提交到仓库即可） | 个人，需手动分享 |
+| 更新 | 仓库提交后所有人刷新可见 | 仅本地 |
 
 ---
 
@@ -444,6 +555,7 @@ WebView 内通过面板手动触发测试（P0 已支持）。扩展方案：
 interface AutoBotConfig {
   project: string;
   baseUrl?: string;
+  testsBaseUrl?: string;              // 远程用例仓库 URL
   trackers?: TrackerConfig[];
   cleanupFunctions?: Record<string, CleanupFnConfig>;
   panel?: { title?: string; position?: string };
@@ -520,22 +632,36 @@ interface TestAction {
 ### 流程 A：快速接入新项目
 
 ```
-1. 在目标 Web 应用的 HTML 中添加 AutoBot script 标签
+1. 在目标 Web 应用的 HTML 中添加 AutoBot script 标签，指定项目名:
+   <script src="https://your-cdn.com/autobot.js" data-project="my-app"></script>
    （或使用浏览器扩展 / CLI 注入，无需改代码）
 
-2. 创建 autobot.config.json:
-   {
-     "project": "my-ecommerce",
-     "baseUrl": "https://my-app.com",
-     "trackers": [
-       { "name": "ga4", "target": "window.gtag" }
-     ],
-     "cleanupFunctions": {
-       "logout": { "type": "navigate-click", "url": "/settings", "clickText": "Sign Out" }
-     }
-   }
+2. 在用例仓库中创建项目目录:
+   tests/my-app/
+   ├── project.json        (tracker、cleanup 配置)
+   └── smoke.json           (第一个测试套件)
 
-3. 打开应用 → 激活 AutoBot → 开始录制/编写用例
+3. 更新 tests/manifest.json，添加新项目
+
+4. 提交 → GitHub Pages 自动部署
+
+5. 打开应用 → AutoBot 自动按项目名拉取配置和用例
+```
+
+### 流程 B：录制用例并分享给团队
+
+```
+1. 打开目标 Web 应用 → 激活 AutoBot
+2. 教学模式 → 录制操作流程 → 插入断言 → 保存
+3. 面板中本地用例列表出现录制结果
+4. 分享方式（任选）:
+   a. 点击 📋 → 复制 JSON → 飞书群/Slack 粘贴
+   b. 点击 ↓ → 下载 .json → 发送文件
+   c. 将 JSON 提交到 tests/{project}/ → 合并后所有人刷新可见
+5. 对方接收:
+   a. 面板中"粘贴 JSON" → 导入为本地用例
+   b. 面板中"导入用例" → 选择 .json 文件
+   c. 面板中"🔄 刷新" → 远程用例列表自动更新
 ```
 
 ### 流程 B：QA 日常回归测试（面板操作）
@@ -683,7 +809,8 @@ GraceChat 作为首个接入项目，展示适配层如何工作：
 | 变量引擎 | `src/testing/variables.ts` | `{{variable}}` 替换 |
 | 报告生成 | `src/testing/reporter.ts` | JSON 报告 + 控制台摘要 |
 | 失败截图 | `src/testing/screenshot.ts` | Canvas API 截图 |
-| 面板 UI | `src/testing/ui.ts` | 测试模式 Tab |
+| 用例仓库 | `src/testing/repository.ts` | 远程用例拉取 + 本地用例管理（IndexedDB） |
+| 面板 UI | `src/testing/ui.ts` | 测试模式 Tab（含项目切换、分享、刷新） |
 
 **依赖关系：**
 ```
@@ -702,6 +829,8 @@ cleanup.ts（依赖 config 获取自定义函数）
 runner.ts（依赖 assertion + variables + cleanup + player.ts）
   ↓
 reporter.ts（依赖 runner 的执行结果）
+  ↓
+repository.ts（依赖 config 获取远程 URL + store.ts 管理本地用例）
   ↓
 ui.ts（整合以上所有，接入面板）
 ```
