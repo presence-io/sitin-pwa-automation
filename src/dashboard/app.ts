@@ -416,8 +416,145 @@ function showPreviewModal(suite: any): void {
 }
 
 function showReportModal(deviceId: string, report: any): void {
-  const json = JSON.stringify(report, null, 2);
-  showModal(`Report: ${deviceId}`, `<pre>${esc(json)}</pre>`);
+  const s = report.summary || {};
+  const duration = report.duration ? (report.duration / 1000).toFixed(1) : '?';
+  const passRate = s.total ? Math.round((s.passed / s.total) * 100) : 0;
+  const barColor = s.failed > 0 ? '#f85149' : '#3fb950';
+
+  let html = `
+    <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:${barColor}">${passRate}%</div>
+        <div style="font-size:11px;color:#8b949e">Pass Rate</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#e6edf3">${s.passed || 0}<span style="font-size:14px;color:#8b949e">/${s.total || 0}</span></div>
+        <div style="font-size:11px;color:#8b949e">Passed</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#e6edf3">${duration}<span style="font-size:14px;color:#8b949e">s</span></div>
+        <div style="font-size:11px;color:#8b949e">Duration</div>
+      </div>
+    </div>
+
+    <div style="background:#21262d;border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden">
+      <div style="height:100%;width:${passRate}%;background:${barColor};border-radius:6px"></div>
+    </div>
+  `;
+
+  // Case results
+  const results: any[] = report.results || [];
+  for (const r of results) {
+    const icon = r.status === 'passed' ? '✅' : r.status === 'failed' ? '❌' : '⏭️';
+    const caseColor = r.status === 'passed' ? '#3fb950' : r.status === 'failed' ? '#f85149' : '#8b949e';
+    const caseDur = r.duration ? (r.duration / 1000).toFixed(1) + 's' : '';
+
+    html += `<div style="border:1px solid #30363d;border-radius:8px;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#161b22;cursor:pointer" class="case-toggle">
+        <span>${icon}</span>
+        <span style="flex:1;font-size:13px;font-weight:600;color:${caseColor}">${esc(r.name)}</span>
+        <span style="font-size:11px;color:#8b949e">${caseDur}</span>
+        <span style="font-size:10px;color:#484f58">▼</span>
+      </div>
+      <div class="case-detail" style="display:none;padding:8px 12px;background:#0d1117">`;
+
+    // Error message
+    if (r.error) {
+      html += `<div style="padding:6px 8px;background:#3d1214;border:1px solid #f85149;border-radius:4px;margin-bottom:8px;font-size:12px;color:#f85149">${esc(r.error)}</div>`;
+    }
+
+    // Steps table
+    const steps: any[] = r.steps || [];
+    if (steps.length > 0) {
+      html += `<table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead><tr style="color:#8b949e;text-align:left">
+          <th style="padding:4px 6px;border-bottom:1px solid #30363d;width:30px">#</th>
+          <th style="padding:4px 6px;border-bottom:1px solid #30363d">Action</th>
+          <th style="padding:4px 6px;border-bottom:1px solid #30363d;width:50px">Status</th>
+          <th style="padding:4px 6px;border-bottom:1px solid #30363d;width:60px">Time</th>
+        </tr></thead><tbody>`;
+
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const sIcon = step.status === 'ok' ? '✓' : step.status === 'fail' ? '✗' : '○';
+        const sColor = step.status === 'ok' ? '#3fb950' : step.status === 'fail' ? '#f85149' : '#8b949e';
+        const stepDur = step.duration ? step.duration + 'ms' : '';
+        html += `<tr style="border-bottom:1px solid #21262d">
+          <td style="padding:3px 6px;color:#484f58">${i + 1}</td>
+          <td style="padding:3px 6px;color:#e6edf3">${esc(step.action)}${step.detail ? `<div style="font-size:10px;color:#8b949e;margin-top:1px">${esc(step.detail)}</div>` : ''}</td>
+          <td style="padding:3px 6px;color:${sColor};font-weight:600">${sIcon}</td>
+          <td style="padding:3px 6px;color:#8b949e">${stepDur}</td>
+        </tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+
+    // Screenshot
+    if (r.screenshot) {
+      html += `<div style="margin-top:8px"><div style="font-size:10px;color:#8b949e;margin-bottom:4px">Failure Screenshot:</div>
+        <img src="${r.screenshot}" style="max-width:100%;border:1px solid #30363d;border-radius:4px" /></div>`;
+    }
+
+    // Tracked events
+    const events: any[] = r.trackedEvents || [];
+    if (events.length > 0) {
+      html += `<div style="margin-top:8px"><div style="font-size:10px;color:#8b949e;margin-bottom:4px">Tracked Events (${events.length}):</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">`;
+      for (const ev of events) {
+        html += `<span style="padding:2px 8px;background:#0d2137;border:1px solid #1f6feb;border-radius:10px;font-size:10px;color:#58a6ff">${esc(ev.sdk)}:${esc(ev.event)}</span>`;
+      }
+      html += `</div></div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  // Global tracked events
+  const allEvents: any[] = report.trackedEvents || [];
+  if (allEvents.length > 0) {
+    html += `<div style="margin-top:12px;border-top:1px solid #30363d;padding-top:12px">
+      <div style="font-size:12px;font-weight:600;color:#8b949e;margin-bottom:6px">All Tracked Events (${allEvents.length})</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead><tr style="color:#8b949e;text-align:left">
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">SDK</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Event</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Step</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Time</th>
+        </tr></thead><tbody>`;
+    for (const ev of allEvents) {
+      const t = new Date(ev.timestamp).toLocaleTimeString();
+      html += `<tr style="border-bottom:1px solid #21262d">
+        <td style="padding:3px 6px;color:#58a6ff">${esc(ev.sdk)}</td>
+        <td style="padding:3px 6px;color:#e6edf3">${esc(ev.event)}</td>
+        <td style="padding:3px 6px;color:#8b949e">${ev.stepIndex ?? '-'}</td>
+        <td style="padding:3px 6px;color:#484f58">${t}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // Export button
+  html += `<div style="margin-top:12px;display:flex;gap:8px">
+    <button id="report-export-json" style="padding:6px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:12px;cursor:pointer">📋 Copy JSON</button>
+  </div>`;
+
+  showModal(`Report: ${deviceId} — ${report.suite || ''}`, html);
+
+  // Bind toggle for case details
+  document.querySelectorAll('.case-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const detail = toggle.nextElementSibling as HTMLElement;
+      if (detail) detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+
+  // Bind export
+  document.getElementById('report-export-json')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    const btn = document.getElementById('report-export-json')!;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy JSON'; }, 2000);
+  });
 }
 
 function showPasteModal(): void {
