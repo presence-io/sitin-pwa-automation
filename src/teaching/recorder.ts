@@ -2,7 +2,8 @@ import { log } from '../core/helpers';
 import type { RecordingStep, Locator } from './store';
 
 function isAutobotElement(el: Element): boolean {
-  return !!(el.closest('#autobot-panel') || el.closest('#autobot-fab') || el.closest('#autobot-minibar'));
+  return !!(el.closest('#autobot-panel') || el.closest('#autobot-fab') || el.closest('#autobot-minibar')
+    || el.closest('#__vconsole') || el.closest('.vc-mask'));
 }
 
 function getClickableAncestor(el: Element): Element {
@@ -44,6 +45,19 @@ function generateLocators(el: Element): Locator[] {
     const text = el.textContent?.trim();
     if (text && text.length < 80) {
       locators.push({ type: 'text', value: text });
+    }
+  }
+
+  // For non-clickable elements (e.g. list items), still generate a text locator
+  // using a shorter excerpt to handle dynamic content like timestamps
+  if (!isClickable && el.textContent) {
+    const full = el.textContent.trim();
+    if (full.length > 0 && full.length < 200) {
+      // Extract the first meaningful line (likely a name/title) as locator
+      const firstLine = full.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)[0];
+      if (firstLine && firstLine.length < 80) {
+        locators.push({ type: 'text', value: firstLine });
+      }
     }
   }
 
