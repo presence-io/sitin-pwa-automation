@@ -150,18 +150,24 @@ function bindEvents(container: HTMLElement, localSuites: TestSuite[]) {
   container.querySelector('#test-refresh-btn')?.addEventListener('click', () => refreshAll(container));
 
   container.querySelectorAll('.btn-run-remote').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
       const idx = parseInt(btn.getAttribute('data-idx')!);
       const suite = remoteSuites[idx];
-      if (suite) await executeSuite(suite, container);
+      if (!suite) return;
+      if (!confirm(`Run "${suite.name}" (${suite.cases.length} cases)?`)) return;
+      await executeSuite(suite, container);
     });
   });
 
   container.querySelectorAll('.btn-run-local').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
       const name = btn.getAttribute('data-name')!;
       const suite = localSuites.find(s => s.name === name);
-      if (suite) await executeSuite(suite, container);
+      if (!suite) return;
+      if (!confirm(`Run "${suite.name}" (${suite.cases.length} cases)?`)) return;
+      await executeSuite(suite, container);
     });
   });
 

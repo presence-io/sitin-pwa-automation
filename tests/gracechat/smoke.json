@@ -4,9 +4,6 @@
     {
       "name": "Quick Login",
       "tags": ["smoke", "login"],
-      "setup": [
-        { "action": "call", "fn": "clearLocalStorage" }
-      ],
       "steps": [
         { "action": "navigate", "url": "/login" },
         { "action": "wait", "delay": 2000 },
