@@ -98,10 +98,15 @@ export function createTeachingUI(container: Element) {
 
   // ── Recording ──
   btnStart.addEventListener('click', () => {
-    recorder.start((step) => {
-      updateMinibarLabel(`录制中 · ${recorder.stepCount} 步`);
-      updateRecStatus(`录制中 (${recorder.stepCount} 步)`);
-    });
+    recorder.start(
+      (step) => {
+        updateMinibarLabel(`录制中 · ${recorder.stepCount} 步`);
+        updateRecStatus(`录制中 (${recorder.stepCount} 步)`);
+      },
+      (texts, onPick) => {
+        showTextPicker(texts, onPick);
+      }
+    );
     btnStart.disabled = true;
     btnStop.disabled = false;
     updateRecStatus('录制中 (0 步)');
@@ -199,6 +204,55 @@ export function createTeachingUI(container: Element) {
     a.click(); URL.revokeObjectURL(url);
     updateRecStatus(`已导出 ${all.length} 条`);
   });
+
+  // ── Text picker for list items ──
+  function showTextPicker(texts: string[], onPick: (text: string | null) => void) {
+    let popup = document.getElementById('autobot-text-picker');
+    if (popup) popup.remove();
+
+    popup = document.createElement('div');
+    popup.id = 'autobot-text-picker';
+    popup.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #00bcd4;border-radius:8px;padding:10px;z-index:999999;font-family:-apple-system,sans-serif;font-size:12px;color:#eee;box-shadow:0 4px 16px rgba(0,0,0,.4);min-width:220px;max-width:320px';
+
+    popup.innerHTML = `
+      <div style="font-weight:600;margin-bottom:6px;color:#00bcd4;font-size:11px">选择匹配文本:</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${texts.map((t, i) => `
+          <button data-pick-idx="${i}" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHTML(t)}</button>
+        `).join('')}
+      </div>
+      <button id="text-picker-skip" style="margin-top:6px;padding:4px;background:none;border:1px solid #444;border-radius:4px;color:#888;cursor:pointer;font-size:10px;width:100%">跳过（用 CSS 定位）</button>
+    `;
+
+    document.body.appendChild(popup);
+
+    let picked = false;
+    popup.querySelectorAll('[data-pick-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (picked) return;
+        picked = true;
+        const idx = parseInt((btn as HTMLElement).dataset.pickIdx!);
+        popup!.remove();
+        onPick(texts[idx]);
+      });
+    });
+
+    popup.querySelector('#text-picker-skip')!.addEventListener('click', () => {
+      if (picked) return;
+      picked = true;
+      popup!.remove();
+      onPick(null);
+    });
+
+    // Auto-dismiss after 5 seconds (skip)
+    setTimeout(() => {
+      if (!picked) {
+        picked = true;
+        popup?.remove();
+        onPick(null);
+      }
+    }, 5000);
+  }
 
   // ── Assert popup during recording ──
   function showAssertPopup(bar: HTMLElement) {

@@ -22,16 +22,16 @@ function getClickableAncestor(el: Element): Element {
 }
 
 // Extract the most stable text from an element for locator matching.
-// For list items (chat list, contact list etc.), find all leaf text nodes,
-// filter out timestamps, and pick the shortest one — typically a name/title
-// rather than a message preview or description.
+// Walks leaf text nodes in DOM order, skips timestamps and very short
+// tokens (likely counters/badges), returns the first qualifying text.
+// In typical list UIs, the name/title appears before message previews.
 function extractStableText(el: Element): string | null {
   const leafTexts: string[] = [];
   const walk = (node: Element, depth: number) => {
     if (depth > 5 || leafTexts.length >= 10) return;
     if (node.children.length === 0) {
       const t = node.textContent?.trim();
-      if (t && t.length >= 2 && !looksLikeTimestamp(t)) {
+      if (t && t.length >= 2 && !looksLikeDynamic(t)) {
         leafTexts.push(t);
       }
     } else {
@@ -41,19 +41,32 @@ function extractStableText(el: Element): string | null {
     }
   };
   walk(el, 0);
-
-  if (leafTexts.length === 0) return null;
-
-  // Pick the shortest text — most likely a label/name, not a message body
-  leafTexts.sort((a, b) => a.length - b.length);
-  return leafTexts[0];
+  return leafTexts[0] || null;
 }
 
-function looksLikeTimestamp(s: string): boolean {
-  // Match common time patterns: "16:02", "3:45 PM", "2m", "1h", "Yesterday"
-  return /^\d{1,2}:\d{2}/.test(s)
-    || /^\d+[smh]$/.test(s)
-    || /^(just now|yesterday|today|\d+ (min|sec|hour|day))/i.test(s);
+function extractAllLeafTexts(el: Element): string[] {
+  const texts: string[] = [];
+  const walk = (node: Element, depth: number) => {
+    if (depth > 6 || texts.length >= 15) return;
+    if (node.children.length === 0) {
+      const t = node.textContent?.trim();
+      if (t && t.length >= 1) texts.push(t);
+    } else {
+      for (let i = 0; i < node.children.length; i++) {
+        walk(node.children[i], depth + 1);
+      }
+    }
+  };
+  walk(el, 0);
+  return texts;
+}
+
+function looksLikeDynamic(s: string): boolean {
+  if (/^\d{1,2}:\d{2}/.test(s)) return true;
+  if (/^\d+[smhd]$/.test(s)) return true;
+  if (/^(just now|yesterday|today|\d+ (min|sec|hour|day))/i.test(s)) return true;
+  if (/^\d+$/.test(s)) return true;
+  return false;
 }
 
 function generateLocators(el: Element): Locator[] {
@@ -133,6 +146,7 @@ function generateLocators(el: Element): Locator[] {
 }
 
 export type OnStepCallback = (step: RecordingStep) => void;
+export type TextPickerCallback = (texts: string[], onPick: (text: string | null) => void) => void;
 
 export interface AssertStep {
   type: 'assert';
@@ -147,6 +161,7 @@ export class Recorder {
   private recording = false;
   private lastTime = 0;
   private onStep: OnStepCallback | null = null;
+  private onTextPick: TextPickerCallback | null = null;
   private abortController: AbortController | null = null;
   private lastUrl = '';
 
@@ -169,13 +184,14 @@ export class Recorder {
     this.addStep(step);
   }
 
-  start(onStep?: OnStepCallback) {
+  start(onStep?: OnStepCallback, onTextPick?: TextPickerCallback) {
     if (this.recording) return;
     this.steps = [];
     this.recording = true;
     this.lastTime = Date.now();
     this.lastUrl = location.href;
     this.onStep = onStep || null;
+    this.onTextPick = onTextPick || null;
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
 
@@ -208,14 +224,40 @@ export class Recorder {
     const raw = e.target as Element;
     if (!raw || isAutobotElement(raw)) return;
     const el = getClickableAncestor(raw);
-    const locators = generateLocators(el);
     const tag = el.tagName.toLowerCase();
-    // Use stable text for textHint too, falling back to full textContent
-    const stableHint = extractStableText(el);
-    const textHint = stableHint || el.textContent?.trim().slice(0, 80) || undefined;
+
+    const isClickable = el.tagName === 'BUTTON' || el.tagName === 'A'
+      || el.getAttribute('role') === 'button'
+      || window.getComputedStyle(el).cursor === 'pointer';
+
     queueMicrotask(() => {
       if (!this.recording) return;
-      this.addStep({ type: 'click', locators, tag, textHint, delay: 0 });
+
+      if (isClickable) {
+        const locators = generateLocators(el);
+        const textHint = el.textContent?.trim().slice(0, 80) || undefined;
+        this.addStep({ type: 'click', locators, tag, textHint, delay: 0 });
+        return;
+      }
+
+      // Non-clickable element (list item etc.) — let user pick which text to use
+      const leafTexts = extractAllLeafTexts(el);
+      if (leafTexts.length > 1 && this.onTextPick) {
+        this.onTextPick(leafTexts, (picked) => {
+          const locators = generateLocators(el);
+          if (picked) {
+            // Replace auto-detected text locator with user's choice
+            const textIdx = locators.findIndex(l => l.type === 'text');
+            if (textIdx >= 0) locators[textIdx].value = picked;
+            else locators.unshift({ type: 'text', value: picked });
+          }
+          this.addStep({ type: 'click', locators, tag, textHint: picked || undefined, delay: 0 });
+        });
+      } else {
+        const locators = generateLocators(el);
+        const stableHint = extractStableText(el);
+        this.addStep({ type: 'click', locators, tag, textHint: stableHint || undefined, delay: 0 });
+      }
     });
   };
 
