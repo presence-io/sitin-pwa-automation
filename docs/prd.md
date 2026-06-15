@@ -545,6 +545,110 @@ WebView 内通过面板手动触发测试（P0 已支持）。扩展方案：
 - **URL Scheme 触发**：`your-app://autotest?suite=smoke` → 自动执行 → 结果存 IndexedDB
 - **结果提取**：通过 ADB + Chrome DevTools Protocol 从 IndexedDB 读取报告
 
+#### F15: 远程设备控制 **[待讨论]**
+
+从一台设备（控制端）远程触发另一台设备（被控端）执行测试用例，无需物理接触被控设备。
+
+**典型场景：**
+- QA 在 PC 上控制多台手机同时跑回归测试
+- CI 触发真机上的 WebView 测试
+- 远程协助：让对方设备执行指定用例复现问题
+
+##### 15.1 设备注册与识别
+
+每台运行 AutoBot 的设备注册一个唯一身份：
+
+- **设备 ID**：面板中可手动设置设备名（如 "iPhone-QA-01"），存入 `localStorage.autobot_device_id`
+- **自动生成**：未设置时自动用 `UA简写 + 随机串` 生成（如 "Chrome-Mac-a3x9"）
+- **心跳上报**：每 30 秒向共享存储写入 `{ deviceId, project, status: "online", lastSeen: timestamp }`
+
+##### 15.2 指令流程
+
+```
+控制端                    共享存储                   被控端
+  │                         │                         │
+  │  1. 查看在线设备列表     │                         │
+  │ ──────────────────────> │                         │
+  │ <── 返回设备列表 ─────── │                         │
+  │                         │                         │
+  │  2. 发送执行指令         │                         │
+  │    targetDevice: "xxx"  │                         │
+  │    suite: "smoke"       │                         │
+  │ ──────────────────────> │                         │
+  │                         │  3. 被控端轮询到指令      │
+  │                         │ ──────────────────────> │
+  │                         │                         │  4. 执行测试
+  │                         │                         │
+  │                         │  5. 写回结果             │
+  │                         │ <────────────────────── │
+  │  6. 查看结果             │                         │
+  │ ──────────────────────> │                         │
+  │ <── 返回报告 ─────────── │                         │
+```
+
+**指令数据结构：**
+```json
+{
+  "id": "cmd-1718438400000",
+  "targetDevice": "iPhone-QA-01",
+  "action": "run",
+  "project": "gracechat",
+  "suite": "smoke",
+  "status": "pending",
+  "createdAt": 1718438400000,
+  "result": null
+}
+```
+
+**状态流转：** `pending` → `running` → `completed` / `failed`
+
+##### 15.3 通信方案（待讨论）
+
+| 方案 | 优势 | 劣势 | 成本 |
+|------|------|------|------|
+| **飞书多维表格** | 团队已有飞书账号和 API，零注册成本 | 轮询延迟（3-5 秒）、API 频率限制 | 免费 |
+| **Firebase Realtime DB** | 实时推送（毫秒级）、免费额度充足、纯前端 SDK | 需注册 Google 账号、国内可能需科学上网 | 免费（100 并发） |
+| **免费 JSON 存储（jsonbin.io 等）** | 5 分钟接入、极简 | 稳定性一般、有请求频率限制 | 免费 |
+| **WebSocket 自建** | 实时、完全可控 | 需要部署后端服务 | 需服务器 |
+| **Supabase Realtime** | 实时推送、PostgreSQL 存储、前端 SDK | 需注册、免费额度有限 | 免费（500 并发） |
+
+**选型考量：**
+- 是否需要实时性（轮询 vs 推送）
+- 国内网络环境（Firebase 可能受限）
+- 是否愿意引入第三方服务
+- 是否需要持久化历史记录
+
+##### 15.4 面板交互
+
+**被控端：** 面板增加设备配置区域
+```
+┌─ 📡 Device ────────────────────────────┐
+│  Device ID: [iPhone-QA-01    ] [Save]  │
+│  Status: 🟢 Online                     │
+│  Remote control: [ON ▼]                │
+└────────────────────────────────────────┘
+```
+
+**控制端：** 面板增加远程控制区域（或独立控制页面）
+```
+┌─ 🎮 Remote Control ───────────────────┐
+│                                        │
+│  Online Devices:                       │
+│  📱 iPhone-QA-01    gracechat  🟢  [▶] │
+│  📱 Samsung-Test    gracechat  🟢  [▶] │
+│  📱 Pixel-Dev       gracechat  🔴      │
+│                                        │
+│  Suite: [smoke ▼]                      │
+│  Target: [All online ▼]               │
+│  [Run on selected devices]             │
+│                                        │
+│  ─── Results ─────────────────────     │
+│  iPhone-QA-01:  2/2 passed ✓          │
+│  Samsung-Test:  running... (1/2)       │
+│                                        │
+└────────────────────────────────────────┘
+```
+
 ---
 
 ## 四、测试用例数据结构（最终版）
