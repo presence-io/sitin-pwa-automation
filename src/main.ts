@@ -3,6 +3,7 @@ import { createPanel } from './ui/panel';
 import { configManager } from './testing/config';
 import { tracker } from './testing/tracker';
 import { startRemote } from './testing/remote';
+import { listenSyncControl } from './testing/screensync';
 
 async function init() {
   log('AutoBot v4 loaded');
@@ -10,6 +11,7 @@ async function init() {
   tracker.install(configManager.getTrackers());
   createPanel();
   startRemote();
+  listenSyncControl();
 }
 
 if (document.readyState === 'complete' || document.body) init();

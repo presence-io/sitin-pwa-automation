@@ -5,6 +5,8 @@ import {
   saveRecording, getAllRecordings, deleteRecording, exportRecordingsJSON, importAndSaveJSON,
   type Recording, type RecordingStep,
 } from './store';
+import { saveLocalSuite } from '../testing/repository';
+import type { TestSuite, TestAction } from '../testing/types';
 
 const recorder = new Recorder();
 const player = new Player();
@@ -198,9 +200,10 @@ export function createTeachingUI(container: Element) {
     savedList.innerHTML = all.map(rec => `
       <div class="saved-item" data-name="${escHTML(rec.name)}">
         <span class="name">${escHTML(rec.name)} (${rec.steps.length}步)</span>
-        <button class="green btn-play">▶</button>
-        <button class="btn-export-one">↓</button>
-        <button class="warn btn-del">✕</button>
+        <button class="green btn-play" title="Play">▶</button>
+        <button class="btn-to-test" title="Convert to test case">🧪</button>
+        <button class="btn-export-one" title="Download">↓</button>
+        <button class="warn btn-del" title="Delete">✕</button>
       </div>
     `).join('');
 
@@ -210,6 +213,15 @@ export function createTeachingUI(container: Element) {
       item.querySelector('.btn-play')!.addEventListener('click', async () => {
         const rec = all.find(r => r.name === name);
         if (rec) await startPlayback(rec);
+      });
+
+      item.querySelector('.btn-to-test')!.addEventListener('click', async () => {
+        const rec = all.find(r => r.name === name);
+        if (!rec) return;
+        const suite = recordingToTestSuite(rec);
+        await saveLocalSuite(suite);
+        updateRecStatus(`已转为测试用例: ${suite.name}`);
+        log('Converted to test suite:', suite.name);
       });
 
       item.querySelector('.btn-export-one')!.addEventListener('click', () => {
@@ -230,6 +242,46 @@ export function createTeachingUI(container: Element) {
         updateRecStatus(`已删除: ${name}`);
       });
     });
+  }
+
+  function recordingToTestSuite(rec: Recording): TestSuite {
+    const steps: TestAction[] = rec.steps.map(s => {
+      const action: TestAction = {
+        action: s.type as TestAction['action'],
+        locators: s.locators,
+        tag: s.tag,
+        textHint: s.textHint,
+        value: s.value,
+        url: s.url,
+        scrollX: s.scrollX,
+        scrollY: s.scrollY,
+      };
+      return action;
+    });
+
+    // Auto-insert URL assertion after navigate steps
+    const enrichedSteps: TestAction[] = [];
+    for (const step of steps) {
+      enrichedSteps.push(step);
+      if (step.action === 'navigate' && step.url) {
+        enrichedSteps.push({
+          action: 'assert',
+          assertType: 'url',
+          expected: step.url,
+          timeout: 5000,
+        });
+      }
+    }
+
+    return {
+      name: `[test] ${rec.name}`,
+      cases: [{
+        name: rec.name,
+        tags: ['recorded'],
+        steps: enrichedSteps,
+        teardownOnFail: true,
+      }],
+    };
   }
 
   refreshSavedList();

@@ -21,6 +21,7 @@ interface DashboardState {
   activeCmd: string | null;
   results: Map<string, CommandProgress>;
   history: RemoteCommand[];
+  screenViewers: Map<string, EventSource>;
 }
 
 const state: DashboardState = {
@@ -33,6 +34,7 @@ const state: DashboardState = {
   activeCmd: null,
   results: new Map(),
   history: [],
+  screenViewers: new Map(),
 };
 
 let devicesSource: EventSource | null = null;
@@ -101,6 +103,7 @@ function renderDevices(): void {
         <div class="name">${esc(d.deviceId)}</div>
         <div class="meta">${d.project ? esc(d.project) : 'no project'} · ${esc(ua)}${ago}</div>
       </div>
+      ${d.status === 'online' ? `<button class="preview-btn btn-screen" data-device="${esc(d.deviceId)}" title="View screen">👁</button>` : ''}
     </div>`;
   }).join('');
 
@@ -110,6 +113,13 @@ function renderDevices(): void {
       if ((e.target as HTMLInputElement).checked) state.selectedDevices.add(id);
       else state.selectedDevices.delete(id);
       updateRunButton();
+    });
+  });
+
+  el.querySelectorAll('.btn-screen').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const deviceId = (e.target as HTMLElement).dataset.device!;
+      showScreenModal(deviceId);
     });
   });
 }
@@ -354,6 +364,51 @@ function showPasteModal(): void {
       updateRunButton();
       closeModal();
     } catch { alert('Invalid JSON'); }
+  });
+}
+
+function showScreenModal(deviceId: string): void {
+  // Tell agent to start sync
+  fbPut(`syncControl/${deviceId}`, { screenSync: true, fps: 1 });
+
+  const container = document.getElementById('modal-container')!;
+  container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-hdr">
+        <h3>📱 ${esc(deviceId)}</h3>
+        <button class="close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center;padding:8px">
+        <div id="screen-info" style="font-size:11px;color:#8b949e;margin-bottom:8px">Connecting...</div>
+        <img id="screen-img" style="max-width:100%;border:1px solid #30363d;border-radius:6px;background:#0d1117;min-height:200px" />
+      </div>
+    </div>
+  </div>`;
+
+  const imgEl = document.getElementById('screen-img') as HTMLImageElement;
+  const infoEl = document.getElementById('screen-info')!;
+
+  // SSE listen for screen updates
+  const source = fbListen(`screens/${deviceId}`, async () => {
+    const data = await fbGet<any>(`screens/${deviceId}`);
+    if (data?.image) {
+      imgEl.src = `data:image/jpeg;base64,${data.image}`;
+      infoEl.textContent = `${data.width}×${data.height} · ${data.url || ''} · ${new Date(data.timestamp).toLocaleTimeString()}`;
+    }
+  });
+
+  state.screenViewers.set(deviceId, source);
+
+  const cleanup = () => {
+    source.close();
+    state.screenViewers.delete(deviceId);
+    fbPut(`syncControl/${deviceId}`, { screenSync: false });
+    container.innerHTML = '';
+  };
+
+  container.querySelector('#modal-close')!.addEventListener('click', cleanup);
+  container.querySelector('#modal-overlay')!.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'modal-overlay') cleanup();
   });
 }
 
