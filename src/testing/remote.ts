@@ -3,6 +3,8 @@ import { configManager } from './config';
 import { runSuite } from './runner';
 import { generateReport, printReportToConsole } from './reporter';
 import { fetchRemoteSuite } from './repository';
+import { runStage, runAllStages, STAGES } from '../stages/runner';
+import { st as panelSt, disableAll as panelDisableAll } from '../ui/panel';
 import {
   DB_URL, fbPut, fbGet, fbPatch, fbDelete,
   type DeviceInfo, type RemoteCommand, type CommandProgress,
@@ -250,8 +252,37 @@ async function startRemote(): Promise<void> {
   await registerDevice();
   startHeartbeat();
   listenForCommands();
-  onRemoteCommand((cmd) => executeRemoteCommand(cmd));
+  onRemoteCommand((cmd) => {
+    if (cmd.action === 'stage') executeStageCommand(cmd);
+    else executeRemoteCommand(cmd);
+  });
   await cleanOldCommands();
+}
+
+async function executeStageCommand(cmd: RemoteCommand): Promise<void> {
+  await fbPatch(`commands/${cmd.id}`, { status: 'running' });
+  const deviceId = getDeviceId();
+  const stageIdx = cmd.stageIndex ?? -1;
+
+  try {
+    let ok: boolean;
+    if (stageIdx === -1) {
+      ok = await runAllStages(panelSt, panelDisableAll);
+    } else {
+      panelDisableAll(true);
+      ok = await runStage(stageIdx, panelSt);
+      panelDisableAll(false);
+    }
+
+    await fbPatch(`commands/${cmd.id}`, { status: ok ? 'completed' : 'failed' });
+    await reportProgress(cmd.id, {
+      status: ok ? 'completed' : 'failed',
+      updatedAt: Date.now(),
+    });
+  } catch (e) {
+    await fbPatch(`commands/${cmd.id}`, { status: 'failed' });
+    await reportProgress(cmd.id, { status: 'failed', updatedAt: Date.now() });
+  }
 }
 
 function stopRemote(): void {

@@ -117,6 +117,7 @@ function renderDevices(): void {
       if ((e.target as HTMLInputElement).checked) state.selectedDevices.add(id);
       else state.selectedDevices.delete(id);
       updateRunButton();
+      renderStages();
     });
   });
 
@@ -1106,6 +1107,95 @@ async function restoreLastResults(): Promise<void> {
   }
 }
 
+// ── Stages ──
+
+const STAGE_DEFS = [
+  { id: 's1', name: 'Stage 1', amount: '$0.50', desc: '注销→注册→提现' },
+  { id: 's2', name: 'Stage 2', amount: '$7.00', desc: '任务+Mock→提现' },
+  { id: 's3', name: 'Stage 3', amount: '$8.00', desc: '任务+Mock→提现' },
+  { id: 's4', name: 'Stage 4', amount: '$12.00', desc: 'Mock→提现' },
+  { id: 's5', name: 'Stage 5', amount: '$25.00', desc: 'Mock→提现' },
+];
+
+let stageProgressSource: EventSource | null = null;
+
+function renderStages(): void {
+  const el = document.getElementById('stage-list')!;
+  const selectedDevices = [...state.selectedDevices];
+
+  if (selectedDevices.length === 0) {
+    el.innerHTML = '<div class="empty">Select device(s) first</div>';
+    return;
+  }
+
+  el.innerHTML = STAGE_DEFS.map((s, i) => `
+    <div class="suite-item" style="justify-content:space-between">
+      <span class="name" style="font-weight:600">${esc(s.name)} <span style="color:#3fb950">${s.amount}</span> <span style="color:#8b949e;font-weight:400;font-size:11px">${esc(s.desc)}</span></span>
+      <button class="btn btn-run btn-stage-single" data-stage="${i}" style="font-size:11px;padding:4px 12px">▶</button>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.btn-stage-single').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt((btn as HTMLElement).dataset.stage!);
+      await sendStageCommand(selectedDevices, idx);
+    });
+  });
+}
+
+async function sendStageCommand(targets: string[], stageIndex: number): Promise<void> {
+  const id = `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const stageName = stageIndex === -1 ? 'All Stages' : STAGE_DEFS[stageIndex]?.name || `Stage ${stageIndex + 1}`;
+  const cmd: RemoteCommand = {
+    id,
+    targets,
+    action: 'stage',
+    project: state.project || 'default',
+    suite: stageName,
+    stageIndex,
+    status: 'pending',
+    createdBy: 'dashboard',
+    createdAt: Date.now(),
+  };
+  await fbPut(`commands/${id}`, cmd);
+  document.getElementById('stage-progress-info')!.textContent = `Sent ${stageName} to ${targets.length} device(s)...`;
+
+  // Listen to stage progress
+  startStageProgressListener(targets);
+}
+
+function startStageProgressListener(deviceIds: string[]): void {
+  if (stageProgressSource) stageProgressSource.close();
+
+  const infoEl = document.getElementById('stage-progress-info')!;
+  const statusEl = document.getElementById('stage-status')!;
+
+  // Poll each device's stage progress
+  const poll = async () => {
+    const lines: string[] = [];
+    let allDone = true;
+    for (const devId of deviceIds) {
+      const p = await fbGet<any>(`stageProgress/${devId}`);
+      if (!p) { lines.push(`📱 ${devId}: waiting...`); allDone = false; continue; }
+      const icon = p.status === 'completed' ? '✅' : p.status === 'failed' ? '❌' : '⏳';
+      const detail = p.status === 'running'
+        ? `${p.stageName} · ${p.stepLabel} (step ${p.stepIndex + 1}/${p.totalSteps})`
+        : p.status === 'completed' ? `${p.stageName} done` : `${p.stageName} failed: ${p.error || ''}`;
+      lines.push(`${icon} ${devId}: ${detail}`);
+      if (p.status === 'running') allDone = false;
+    }
+    infoEl.innerHTML = lines.join('<br>');
+
+    const latestStatus = lines.some(l => l.includes('❌')) ? 'failed' : allDone ? 'done' : 'running';
+    statusEl.textContent = latestStatus === 'done' ? '✅' : latestStatus === 'failed' ? '❌' : '⏳';
+  };
+
+  poll();
+  const timer = setInterval(poll, 3000);
+  // Stop after 30 min
+  setTimeout(() => clearInterval(timer), 30 * 60 * 1000);
+}
+
 async function init(): Promise<void> {
   startDeviceListener();
   await loadSuites();
@@ -1139,6 +1229,19 @@ async function init(): Promise<void> {
   document.getElementById('btn-connect-help')!.addEventListener('click', showConnectHelp);
   document.getElementById('btn-paste')!.addEventListener('click', showPasteModal);
   document.getElementById('btn-ai-gen')!.addEventListener('click', showAIGenerate);
+
+  // Stage controls
+  renderStages();
+  document.getElementById('btn-stage-all')!.addEventListener('click', () => {
+    const targets = [...state.selectedDevices];
+    if (targets.length === 0) { alert('Select device(s) first'); return; }
+    if (!confirm(`Run Stage 1→5 on ${targets.length} device(s)? This will delete accounts and restart.`)) return;
+    sendStageCommand(targets, -1);
+  });
+  document.getElementById('btn-refresh-stages')!.addEventListener('click', () => {
+    renderStages();
+    if (state.selectedDevices.size > 0) startStageProgressListener([...state.selectedDevices]);
+  });
 
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   document.getElementById('btn-import')!.addEventListener('click', () => fileInput.click());

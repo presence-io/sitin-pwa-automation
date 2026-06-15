@@ -73,10 +73,11 @@ export interface DeviceInfo {
 export interface RemoteCommand {
   id: string;
   targets: string[];
-  action: 'run' | 'abort';
+  action: 'run' | 'abort' | 'stage';
   project: string;
   suite: string;
   suiteData?: any;
+  stageIndex?: number;  // for action:'stage', -1 = run all
   status: 'pending' | 'running' | 'completed' | 'failed';
   createdBy?: string;
   createdAt: number;

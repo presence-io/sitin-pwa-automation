@@ -6,7 +6,7 @@ import { autoPost } from '../core/post';
 import {
   stepDeleteAccount, stepQuickLogin, stepOnboarding, stepStage1Cashout,
   stepStage2, stepStage3, stepStage4, stepStage5,
-  runS1, resumeS1,
+  runS1, resumeS1, runAllStages,
   type StatusFn, type DisableAllFn,
 } from '../stages';
 import { createTeachingUI } from '../teaching/ui';
@@ -142,6 +142,11 @@ export function createPanel() {
         </div>
       `)}
 
+      ${grpHTML('all-stages', '🚀 一键全跑', `
+        <div class="row"><button id="btn-all-stages" class="accent">一键 Stage 1→5 全部完成</button></div>
+        <div class="row"><span class="st" id="st-all-stages">待执行</span></div>
+      `)}
+
       ${grpHTML('s1', 'Stage 1 — 注销 → 注册 → $0.50', `
         <div class="row"><button id="btn-del">注销账号</button><span class="st" id="st-s1">待执行</span></div>
         <div class="row"><button id="btn-login">快速登录</button></div>
@@ -235,6 +240,14 @@ export function createPanel() {
   p.querySelector('#btn-s3')!.addEventListener('click', () => stepStage3(st));
   p.querySelector('#btn-s4')!.addEventListener('click', () => stepStage4(st));
   p.querySelector('#btn-s5')!.addEventListener('click', () => stepStage5(st));
+
+  // All stages
+  p.querySelector('#btn-all-stages')!.addEventListener('click', async () => {
+    if (!confirm('一键跑 Stage 1→5，将注销账号重新开始，确认？')) return;
+    st('all-stages', 'running', '开始...');
+    const ok = await runAllStages(st, disableAll);
+    st('all-stages', ok ? 'done' : 'error', ok ? '全部完成 ✓' : '执行失败');
+  });
 
   // Tools
   p.querySelector('#btn-post')!.addEventListener('click', () => autoPost((msg) => st('post', 'running', msg)));
