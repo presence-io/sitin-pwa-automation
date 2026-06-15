@@ -381,14 +381,30 @@ function renderHistory(): void {
     const icon = cmd.status === 'completed' ? '✅' : cmd.status === 'failed' ? '❌' : cmd.status === 'running' ? '⏳' : '⏸️';
     const targets = cmd.targets?.join(', ') || (cmd as any).targetDevice || '?';
     const time = new Date(cmd.createdAt).toLocaleString();
+    const isDone = cmd.status === 'completed' || cmd.status === 'failed';
     return `<div class="result-item ${cmd.status === 'completed' ? 'passed' : cmd.status === 'failed' ? 'failed' : ''}">
       <span class="icon">${icon}</span>
       <span class="device">${esc(targets)}</span>
       <span class="detail">${esc(cmd.suite)} · ${esc(cmd.status)}</span>
       <span class="time">${time}</span>
+      ${isDone ? `<button class="preview-btn btn-history-report" data-cmd-id="${esc(cmd.id)}">Report</button>` : ''}
       <button class="preview-btn btn-del-history" data-cmd-id="${esc(cmd.id)}" title="Delete" style="color:#f85149">✕</button>
     </div>`;
   }).join('');
+
+  el.querySelectorAll('.btn-history-report').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cmdId = (btn as HTMLElement).dataset.cmdId!;
+      const cmd = state.history.find(c => c.id === cmdId);
+      const data = await fbGet<Record<string, any>>(`results/${cmdId}`);
+      if (!data || Object.keys(data).length === 0) {
+        alert('No report data found for this command');
+        return;
+      }
+      showHistoryReportModal(cmd, data);
+    });
+  });
 
   el.querySelectorAll('.btn-del-history').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -398,6 +414,135 @@ function renderHistory(): void {
       await fbDelete(`commands/${cmdId}`);
       await fbDelete(`results/${cmdId}`);
       await refreshHistory();
+    });
+  });
+}
+
+function showHistoryReportModal(cmd: RemoteCommand | undefined, deviceResults: Record<string, any>): void {
+  const suiteName = cmd?.suite || 'Unknown';
+  const targets = cmd?.targets?.join(', ') || '';
+  const time = cmd ? new Date(cmd.createdAt).toLocaleString() : '';
+  const entries = Object.entries(deviceResults);
+
+  let html = `<div style="margin-bottom:12px;font-size:12px;color:#8b949e">
+    Suite: <strong style="color:#e6edf3">${esc(suiteName)}</strong> ·
+    Devices: <strong style="color:#e6edf3">${esc(targets)}</strong> ·
+    ${time}
+  </div>`;
+
+  // Summary across all devices
+  let totalPassed = 0, totalFailed = 0, totalAll = 0;
+  for (const [, r] of entries) {
+    if (r.summary) {
+      totalPassed += r.summary.passed || 0;
+      totalFailed += r.summary.failed || 0;
+      totalAll += r.summary.total || 0;
+    }
+  }
+  if (totalAll > 0) {
+    const passRate = Math.round((totalPassed / totalAll) * 100);
+    const barColor = totalFailed > 0 ? '#f85149' : '#3fb950';
+    html += `<div style="display:flex;gap:12px;margin-bottom:12px">
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:${barColor}">${passRate}%</div>
+        <div style="font-size:10px;color:#8b949e">Overall</div>
+      </div>
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#e6edf3">${totalPassed}<span style="font-size:12px;color:#8b949e">/${totalAll}</span></div>
+        <div style="font-size:10px;color:#8b949e">Passed</div>
+      </div>
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#e6edf3">${entries.length}</div>
+        <div style="font-size:10px;color:#8b949e">Devices</div>
+      </div>
+    </div>`;
+  }
+
+  // Per-device results
+  for (const [deviceId, r] of entries) {
+    const ds = r.summary;
+    const dur = r.duration ? (r.duration / 1000).toFixed(1) + 's' : '';
+    const statusIcon = r.status === 'completed' ? '✅' : r.status === 'failed' ? '❌' : '⏳';
+    const summaryText = ds ? `${ds.passed}/${ds.total} passed` : r.status;
+
+    html += `<div style="border:1px solid #30363d;border-radius:8px;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#161b22;cursor:pointer" class="device-toggle">
+        <span>${statusIcon}</span>
+        <span style="flex:1;font-size:13px;font-weight:600;color:#e6edf3">📱 ${esc(deviceId)}</span>
+        <span style="font-size:11px;color:#8b949e">${esc(summaryText)} · ${dur}</span>
+        <span style="font-size:10px;color:#484f58">▼</span>
+      </div>
+      <div class="device-detail" style="display:none;padding:8px 12px;background:#0d1117">`;
+
+    if (r.report) {
+      // Full report available — render case details
+      const results: any[] = r.report.results || [];
+      for (const c of results) {
+        const cIcon = c.status === 'passed' ? '✓' : c.status === 'failed' ? '✗' : '○';
+        const cColor = c.status === 'passed' ? '#3fb950' : c.status === 'failed' ? '#f85149' : '#8b949e';
+        const cDur = c.duration ? (c.duration / 1000).toFixed(1) + 's' : '';
+
+        html += `<div style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px">
+            <span style="color:${cColor};font-weight:700">${cIcon}</span>
+            <span style="color:#e6edf3">${esc(c.name)}</span>
+            <span style="color:#8b949e;font-size:10px">${cDur}</span>
+          </div>`;
+
+        if (c.error) {
+          html += `<div style="padding:4px 8px;background:#3d1214;border:1px solid #f85149;border-radius:4px;margin-bottom:4px;font-size:11px;color:#f85149">${esc(c.error)}</div>`;
+        }
+
+        // Steps
+        const steps: any[] = c.steps || [];
+        if (steps.length > 0) {
+          html += `<table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:4px">`;
+          for (let i = 0; i < steps.length; i++) {
+            const st = steps[i];
+            const sIcon = st.status === 'ok' ? '✓' : st.status === 'fail' ? '✗' : '○';
+            const sColor = st.status === 'ok' ? '#3fb950' : st.status === 'fail' ? '#f85149' : '#8b949e';
+            html += `<tr style="border-bottom:1px solid #21262d">
+              <td style="padding:2px 4px;color:#484f58;width:20px">${i + 1}</td>
+              <td style="padding:2px 4px;color:#e6edf3">${esc(st.action)}${st.detail ? ` <span style="color:#8b949e">${esc(st.detail)}</span>` : ''}</td>
+              <td style="padding:2px 4px;color:${sColor};width:20px">${sIcon}</td>
+              <td style="padding:2px 4px;color:#8b949e;width:50px">${st.duration ? st.duration + 'ms' : ''}</td>
+            </tr>`;
+          }
+          html += `</table>`;
+        }
+
+        // Events
+        const events: any[] = c.trackedEvents || [];
+        if (events.length > 0) {
+          html += `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px">`;
+          for (const ev of events) {
+            const p = ev.params && Object.keys(ev.params).length > 0
+              ? ' (' + Object.entries(ev.params).map(([k, v]) => `${k}=${v}`).join(', ') + ')'
+              : '';
+            html += `<span style="padding:1px 6px;background:#0d2137;border:1px solid #1f6feb;border-radius:8px;font-size:9px;color:#58a6ff" title="${esc(ev.sdk + ':' + ev.event + p)}">${esc(ev.sdk)}:${esc(ev.event)}${p ? ' ...' : ''}</span>`;
+          }
+          html += `</div>`;
+        }
+
+        if (c.screenshot) {
+          html += `<img src="${c.screenshot}" style="max-width:100%;border:1px solid #30363d;border-radius:4px;margin-top:4px" />`;
+        }
+
+        html += `</div>`;
+      }
+    } else {
+      html += `<div style="font-size:11px;color:#8b949e">Summary only — ${esc(summaryText)}</div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  showModal(`History: ${suiteName}`, html);
+
+  document.querySelectorAll('.device-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const detail = toggle.nextElementSibling as HTMLElement;
+      if (detail) detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
     });
   });
 }
