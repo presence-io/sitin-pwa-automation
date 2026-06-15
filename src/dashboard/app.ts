@@ -17,6 +17,8 @@ interface DashboardState {
   devices: DeviceInfo[];
   selectedDevices: Set<string>;
   suites: any[];
+  firebaseSuites: any[];
+  firebaseRecordings: any[];
   selectedSuite: number;
   activeCmd: string | null;
   results: Map<string, CommandProgress>;
@@ -30,6 +32,8 @@ const state: DashboardState = {
   devices: [],
   selectedDevices: new Set(),
   suites: [],
+  firebaseSuites: [],
+  firebaseRecordings: [],
   selectedSuite: -1,
   activeCmd: null,
   results: new Map(),
@@ -130,18 +134,38 @@ async function loadSuites(): Promise<void> {
   state.manifest = await fetchManifest();
   renderProjectSelector();
 
-  if (!state.project || !state.manifest) { state.suites = []; renderSuites(); return; }
-
-  const entry = state.manifest.projects?.find((p: any) => p.id === state.project);
-  if (!entry) { state.suites = []; renderSuites(); return; }
-
-  const suites: any[] = [];
-  for (const s of entry.suites) {
-    const suite = await fetchSuite(state.project!, s.file);
-    if (suite) suites.push({ ...suite, _file: s.file, _remoteName: s.name });
+  if (!state.project) {
+    state.suites = [];
+    state.firebaseSuites = [];
+    state.firebaseRecordings = [];
+    renderSuites();
+    return;
   }
-  state.suites = suites;
-  if (suites.length > 0) state.selectedSuite = 0;
+
+  // Load from GitHub Pages
+  const suites: any[] = [];
+  if (state.manifest) {
+    const entry = state.manifest.projects?.find((p: any) => p.id === state.project);
+    if (entry) {
+      for (const s of entry.suites) {
+        const suite = await fetchSuite(state.project!, s.file);
+        if (suite) suites.push({ ...suite, _file: s.file, _remoteName: s.name, _source: 'remote' });
+      }
+    }
+  }
+
+  // Load from Firebase — suites uploaded by agents
+  const fbSuites = await fbGet<Record<string, any>>(`suites/${state.project}`);
+  state.firebaseSuites = fbSuites ? Object.values(fbSuites).map(s => ({
+    ...s, _source: 'firebase', _remoteName: `🔥 ${s.name}`,
+  })) : [];
+
+  // Load from Firebase — recordings uploaded by agents
+  const fbRecs = await fbGet<Record<string, any>>(`recordings/${state.project}`);
+  state.firebaseRecordings = fbRecs ? Object.values(fbRecs) : [];
+
+  state.suites = [...suites, ...state.firebaseSuites];
+  if (state.suites.length > 0 && state.selectedSuite < 0) state.selectedSuite = 0;
   renderSuites();
   updateRunButton();
 }
@@ -156,24 +180,48 @@ function renderProjectSelector(): void {
 function renderSuites(): void {
   const el = document.getElementById('suite-list')!;
   const countEl = document.getElementById('suite-count')!;
-  countEl.textContent = String(state.suites.length);
+  const totalCount = state.suites.length + state.firebaseRecordings.length;
+  countEl.textContent = String(totalCount);
 
-  if (state.suites.length === 0) {
+  if (totalCount === 0) {
     el.innerHTML = '<div class="empty">No suites loaded — select a project first</div>';
     return;
   }
 
-  el.innerHTML = state.suites.map((s, i) => {
+  let html = '';
+
+  // Test suites (remote + firebase)
+  html += state.suites.map((s, i) => {
     const cases = s.cases?.length ?? 0;
     const checked = i === state.selectedSuite ? 'checked' : '';
+    const isFirebase = s._source === 'firebase';
+    const deleteBtn = isFirebase ? `<button class="preview-btn btn-del-suite" data-idx="${i}" title="Delete" style="color:#f85149">✕</button>` : '';
     return `<div class="suite-item">
       <input type="radio" name="suite" value="${i}" ${checked}>
       <span class="name">${esc(s._remoteName || s.name)}</span>
       <span class="count">${cases} cases</span>
       <button class="preview-btn" data-idx="${i}">Preview</button>
+      ${deleteBtn}
     </div>`;
   }).join('');
 
+  // Recordings from Firebase (not yet converted to test suites)
+  if (state.firebaseRecordings.length > 0) {
+    html += `<div style="font-size:11px;color:#8b949e;margin:10px 0 6px;border-top:1px solid #30363d;padding-top:8px">📹 Recordings from devices</div>`;
+    html += state.firebaseRecordings.map((r, i) => {
+      const steps = r.steps?.length ?? 0;
+      return `<div class="suite-item" style="border-color:#30363d">
+        <span class="name" style="color:#8b949e">📹 ${esc(r.name)} <span style="font-size:10px;color:#484f58">${r.deviceId || ''}</span></span>
+        <span class="count">${steps} steps</span>
+        <button class="preview-btn btn-preview-rec" data-rec-idx="${i}">Preview</button>
+        <button class="preview-btn btn-del-rec" data-rec-idx="${i}" title="Delete" style="color:#f85149">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  el.innerHTML = html;
+
+  // Bind suite events
   el.querySelectorAll('input[type=radio]').forEach(radio => {
     radio.addEventListener('change', (e) => {
       state.selectedSuite = parseInt((e.target as HTMLInputElement).value);
@@ -181,10 +229,42 @@ function renderSuites(): void {
     });
   });
 
-  el.querySelectorAll('.preview-btn').forEach(btn => {
+  el.querySelectorAll('.preview-btn[data-idx]:not(.btn-del-suite)').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = parseInt((e.target as HTMLElement).dataset.idx!);
       showPreviewModal(state.suites[idx]);
+    });
+  });
+
+  el.querySelectorAll('.btn-del-suite').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const idx = parseInt((e.target as HTMLElement).dataset.idx!);
+      const suite = state.suites[idx];
+      if (!suite || suite._source !== 'firebase') return;
+      if (!confirm(`Delete "${suite.name}" from Firebase?`)) return;
+      const key = suite.name.replace(/[.#$/\[\]]/g, '_');
+      await fbDelete(`suites/${state.project}/${key}`);
+      await loadSuites();
+    });
+  });
+
+  // Bind recording events
+  el.querySelectorAll('.btn-preview-rec').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).dataset.recIdx!);
+      showPreviewModal(state.firebaseRecordings[idx]);
+    });
+  });
+
+  el.querySelectorAll('.btn-del-rec').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const idx = parseInt((e.target as HTMLElement).dataset.recIdx!);
+      const rec = state.firebaseRecordings[idx];
+      if (!rec) return;
+      if (!confirm(`Delete recording "${rec.name}"?`)) return;
+      const key = rec.name.replace(/[.#$/\[\]]/g, '_');
+      await fbDelete(`recordings/${state.project}/${key}`);
+      await loadSuites();
     });
   });
 }
@@ -353,13 +433,18 @@ function showPasteModal(): void {
   container.querySelector('#modal-overlay')!.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'modal-overlay') closeModal();
   });
-  container.querySelector('#paste-confirm')!.addEventListener('click', () => {
+  container.querySelector('#paste-confirm')!.addEventListener('click', async () => {
     const text = (document.getElementById('paste-input') as HTMLTextAreaElement).value.trim();
     if (!text) return;
     try {
       const suite = JSON.parse(text);
       if (!suite.name || !Array.isArray(suite.cases)) { alert('Invalid format: need name + cases[]'); return; }
-      state.suites.push({ ...suite, _file: '', _remoteName: `[local] ${suite.name}` });
+      // Save to Firebase
+      if (state.project) {
+        const key = suite.name.replace(/[.#$/\[\]]/g, '_');
+        await fbPut(`suites/${state.project}/${key}`, { ...suite, uploadedAt: Date.now() });
+      }
+      state.suites.push({ ...suite, _file: '', _remoteName: `🔥 ${suite.name}`, _source: 'firebase' });
       renderSuites();
       updateRunButton();
       closeModal();
@@ -489,13 +574,17 @@ function showAIGenerate(): void {
     setTimeout(() => { (container.querySelector('#ai-copy-prompt') as HTMLElement).textContent = '📋 Copy to clipboard'; }, 2000);
   });
 
-  container.querySelector('#ai-import-json')!.addEventListener('click', () => {
+  container.querySelector('#ai-import-json')!.addEventListener('click', async () => {
     const text = (document.getElementById('ai-json-input') as HTMLTextAreaElement).value.trim();
     if (!text) return;
     try {
       const suite = JSON.parse(text);
       if (!suite.name || !Array.isArray(suite.cases)) { alert('Invalid format: need name + cases[]'); return; }
-      state.suites.push({ ...suite, _file: '', _remoteName: `[AI] ${suite.name}` });
+      if (state.project) {
+        const key = suite.name.replace(/[.#$/\[\]]/g, '_');
+        await fbPut(`suites/${state.project}/${key}`, { ...suite, uploadedAt: Date.now() });
+      }
+      state.suites.push({ ...suite, _file: '', _remoteName: `🔥 ${suite.name}`, _source: 'firebase' });
       renderSuites();
       updateRunButton();
       closeModal();
@@ -660,7 +749,12 @@ async function init(): Promise<void> {
       const text = await file.text();
       const suite = JSON.parse(text);
       if (!suite.name || !Array.isArray(suite.cases)) { alert('Invalid format'); return; }
-      state.suites.push({ ...suite, _file: '', _remoteName: `[local] ${suite.name}` });
+      // Save to Firebase
+      if (state.project) {
+        const key = suite.name.replace(/[.#$/\[\]]/g, '_');
+        await fbPut(`suites/${state.project}/${key}`, { ...suite, uploadedAt: Date.now() });
+      }
+      state.suites.push({ ...suite, _file: '', _remoteName: `🔥 ${suite.name}`, _source: 'firebase' });
       renderSuites();
       updateRunButton();
     } catch { alert('Invalid JSON file'); }

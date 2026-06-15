@@ -7,6 +7,9 @@ import {
 } from './store';
 import { saveLocalSuite } from '../testing/repository';
 import { tracker } from '../testing/tracker';
+import { configManager } from '../testing/config';
+import { fbPut } from '../shared/firebase';
+import { getDeviceId } from '../testing/remote';
 import type { TestSuite, TestAction } from '../testing/types';
 
 const recorder = new Recorder();
@@ -142,6 +145,10 @@ export function createTeachingUI(container: Element) {
 
     const rec: Recording = { name, steps, createdAt: Date.now(), updatedAt: Date.now() };
     await saveRecording(rec);
+    // Sync to Firebase
+    const project = configManager.getProject() || 'default';
+    const key = name.replace(/[.#$/\[\]]/g, '_');
+    fbPut(`recordings/${project}/${key}`, { ...rec, deviceId: getDeviceId() }).catch(() => {});
     updateRecStatus(`已保存: ${name} (${steps.length} 步)`);
     await refreshSavedList();
   });
@@ -352,6 +359,10 @@ export function createTeachingUI(container: Element) {
         if (!rec) return;
         const suite = recordingToTestSuite(rec);
         await saveLocalSuite(suite);
+        // Sync to Firebase
+        const project = configManager.getProject() || 'default';
+        const key = suite.name.replace(/[.#$/\[\]]/g, '_');
+        fbPut(`suites/${project}/${key}`, { ...suite, deviceId: getDeviceId(), uploadedAt: Date.now() }).catch(() => {});
         updateRecStatus(`已转为测试用例: ${suite.name}`);
         log('Converted to test suite:', suite.name);
       });
