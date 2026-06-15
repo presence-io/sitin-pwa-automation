@@ -22,29 +22,31 @@ function getClickableAncestor(el: Element): Element {
 }
 
 // Extract the most stable text from an element for locator matching.
-// For list items, walk direct children to find the primary label (e.g. username)
-// while skipping dynamic parts (timestamps, counters, badges).
+// For list items (chat list, contact list etc.), find all leaf text nodes,
+// filter out timestamps, and pick the shortest one — typically a name/title
+// rather than a message preview or description.
 function extractStableText(el: Element): string | null {
-  // Try to find text from the first few leaf children — they're typically
-  // the primary label (name, title) rather than metadata (time, count)
-  const candidates: string[] = [];
+  const leafTexts: string[] = [];
   const walk = (node: Element, depth: number) => {
-    if (depth > 4 || candidates.length >= 3) return;
+    if (depth > 5 || leafTexts.length >= 10) return;
     if (node.children.length === 0) {
       const t = node.textContent?.trim();
-      if (t && t.length >= 2 && t.length < 60 && !looksLikeTimestamp(t)) {
-        candidates.push(t);
+      if (t && t.length >= 2 && !looksLikeTimestamp(t)) {
+        leafTexts.push(t);
       }
     } else {
-      for (let i = 0; i < Math.min(node.children.length, 5); i++) {
+      for (let i = 0; i < node.children.length; i++) {
         walk(node.children[i], depth + 1);
       }
     }
   };
   walk(el, 0);
 
-  // Return the first non-timestamp candidate (usually the name/title)
-  return candidates[0] || null;
+  if (leafTexts.length === 0) return null;
+
+  // Pick the shortest text — most likely a label/name, not a message body
+  leafTexts.sort((a, b) => a.length - b.length);
+  return leafTexts[0];
 }
 
 function looksLikeTimestamp(s: string): boolean {
@@ -208,7 +210,9 @@ export class Recorder {
     const el = getClickableAncestor(raw);
     const locators = generateLocators(el);
     const tag = el.tagName.toLowerCase();
-    const textHint = el.textContent?.trim().slice(0, 80) || undefined;
+    // Use stable text for textHint too, falling back to full textContent
+    const stableHint = extractStableText(el);
+    const textHint = stableHint || el.textContent?.trim().slice(0, 80) || undefined;
     queueMicrotask(() => {
       if (!this.recording) return;
       this.addStep({ type: 'click', locators, tag, textHint, delay: 0 });
