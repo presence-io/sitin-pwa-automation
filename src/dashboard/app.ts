@@ -507,15 +507,27 @@ function showReportModal(deviceId: string, report: any): void {
         <img src="${r.screenshot}" style="max-width:100%;border:1px solid #30363d;border-radius:4px" /></div>`;
     }
 
-    // Tracked events
+    // Tracked events per case
     const events: any[] = r.trackedEvents || [];
     if (events.length > 0) {
       html += `<div style="margin-top:8px"><div style="font-size:10px;color:#8b949e;margin-bottom:4px">Tracked Events (${events.length}):</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">`;
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+        <thead><tr style="color:#8b949e;text-align:left">
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">SDK</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Event</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Params</th>
+        </tr></thead><tbody>`;
       for (const ev of events) {
-        html += `<span style="padding:2px 8px;background:#0d2137;border:1px solid #1f6feb;border-radius:10px;font-size:10px;color:#58a6ff">${esc(ev.sdk)}:${esc(ev.event)}</span>`;
+        const params = ev.params && Object.keys(ev.params).length > 0
+          ? Object.entries(ev.params).map(([k, v]) => `${esc(k)}=${esc(String(v))}`).join(', ')
+          : '-';
+        html += `<tr style="border-bottom:1px solid #21262d">
+          <td style="padding:3px 6px;color:#58a6ff">${esc(ev.sdk)}</td>
+          <td style="padding:3px 6px;color:#e6edf3">${esc(ev.event)}</td>
+          <td style="padding:3px 6px;color:#8b949e;word-break:break-all">${params}</td>
+        </tr>`;
       }
-      html += `</div></div>`;
+      html += `</tbody></table></div>`;
     }
 
     html += `</div></div>`;
@@ -530,14 +542,19 @@ function showReportModal(deviceId: string, report: any): void {
         <thead><tr style="color:#8b949e;text-align:left">
           <th style="padding:3px 6px;border-bottom:1px solid #30363d">SDK</th>
           <th style="padding:3px 6px;border-bottom:1px solid #30363d">Event</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Params</th>
           <th style="padding:3px 6px;border-bottom:1px solid #30363d">Step</th>
           <th style="padding:3px 6px;border-bottom:1px solid #30363d">Time</th>
         </tr></thead><tbody>`;
     for (const ev of allEvents) {
       const t = new Date(ev.timestamp).toLocaleTimeString();
+      const params = ev.params && Object.keys(ev.params).length > 0
+        ? Object.entries(ev.params).map(([k, v]) => `<span style="color:#58a6ff">${esc(k)}</span>=${esc(String(v))}`).join(', ')
+        : '<span style="color:#484f58">-</span>';
       html += `<tr style="border-bottom:1px solid #21262d">
         <td style="padding:3px 6px;color:#58a6ff">${esc(ev.sdk)}</td>
         <td style="padding:3px 6px;color:#e6edf3">${esc(ev.event)}</td>
+        <td style="padding:3px 6px;color:#8b949e;word-break:break-all;max-width:300px">${params}</td>
         <td style="padding:3px 6px;color:#8b949e">${ev.stepIndex ?? '-'}</td>
         <td style="padding:3px 6px;color:#484f58">${t}</td>
       </tr>`;
