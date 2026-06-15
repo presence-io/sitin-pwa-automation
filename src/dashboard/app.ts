@@ -232,7 +232,7 @@ function renderSuites(): void {
   el.querySelectorAll('.preview-btn[data-idx]:not(.btn-del-suite)').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = parseInt((e.target as HTMLElement).dataset.idx!);
-      showPreviewModal(state.suites[idx]);
+      showPreviewModal(state.suites[idx], idx);
     });
   });
 
@@ -567,9 +567,71 @@ function closeModal(): void {
   document.getElementById('modal-container')!.innerHTML = '';
 }
 
-function showPreviewModal(suite: any): void {
+function showPreviewModal(suite: any, suiteIndex?: number): void {
   const json = JSON.stringify(suite, null, 2);
-  showModal(`Preview: ${suite.name}`, `<pre>${esc(json)}</pre>`);
+  const isFirebase = suite._source === 'firebase';
+  const isEditable = isFirebase || suiteIndex !== undefined;
+
+  const container = document.getElementById('modal-container')!;
+  container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
+    <div class="modal" style="max-width:700px">
+      <div class="modal-hdr">
+        <h3>${esc(suite._remoteName || suite.name)}</h3>
+        <button class="close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="suite-editor" style="width:100%;min-height:350px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical">${esc(json)}</textarea>
+        <div id="editor-error" style="font-size:11px;color:#f85149;margin-top:4px;display:none"></div>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #30363d">
+        <button id="editor-copy" style="padding:6px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:12px;cursor:pointer">📋 Copy</button>
+        <button id="editor-save" style="padding:6px 16px;background:#238636;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+      </div>
+    </div>
+  </div>`;
+
+  container.querySelector('#modal-close')!.addEventListener('click', closeModal);
+  container.querySelector('#modal-overlay')!.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'modal-overlay') closeModal();
+  });
+
+  container.querySelector('#editor-copy')!.addEventListener('click', () => {
+    const text = (document.getElementById('suite-editor') as HTMLTextAreaElement).value;
+    navigator.clipboard.writeText(text);
+    (container.querySelector('#editor-copy') as HTMLElement).textContent = '✅ Copied!';
+    setTimeout(() => { (container.querySelector('#editor-copy') as HTMLElement).textContent = '📋 Copy'; }, 2000);
+  });
+
+  container.querySelector('#editor-save')!.addEventListener('click', async () => {
+    const text = (document.getElementById('suite-editor') as HTMLTextAreaElement).value.trim();
+    const errEl = document.getElementById('editor-error')!;
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed.name) { errEl.textContent = 'Missing "name" field'; errEl.style.display = 'block'; return; }
+
+      // Save to Firebase
+      if (state.project) {
+        const key = parsed.name.replace(/[.#$/\[\]]/g, '_');
+        // If name changed, delete old key
+        if (suite.name !== parsed.name) {
+          const oldKey = suite.name.replace(/[.#$/\[\]]/g, '_');
+          await fbDelete(`suites/${state.project}/${oldKey}`);
+        }
+        await fbPut(`suites/${state.project}/${key}`, { ...parsed, uploadedAt: Date.now() });
+      }
+
+      // Update in-memory state
+      if (suiteIndex !== undefined && suiteIndex >= 0 && suiteIndex < state.suites.length) {
+        state.suites[suiteIndex] = { ...parsed, _source: 'firebase', _remoteName: `🔥 ${parsed.name}`, _file: '' };
+      }
+
+      closeModal();
+      await loadSuites();
+    } catch (e) {
+      errEl.textContent = `Invalid JSON: ${e}`;
+      errEl.style.display = 'block';
+    }
+  });
 }
 
 function showReportModal(deviceId: string, report: any): void {
