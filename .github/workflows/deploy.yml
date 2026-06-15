@@ -36,6 +36,8 @@ jobs:
 
       - run: pnpm build
 
+      - run: cp src/dashboard/index.html dist/dashboard.html
+
       - run: cp -r tests dist/tests
 
       - uses: actions/configure-pages@v5

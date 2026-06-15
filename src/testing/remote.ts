@@ -3,28 +3,13 @@ import { configManager } from './config';
 import { runSuite } from './runner';
 import { generateReport, printReportToConsole } from './reporter';
 import { fetchRemoteSuite } from './repository';
+import {
+  DB_URL, fbPut, fbGet, fbPatch, fbDelete,
+  type DeviceInfo, type RemoteCommand, type CommandProgress,
+} from '../shared/firebase';
 import type { TestReport, TestSuite } from './types';
 
-const DB_URL = 'https://autobot-remote-default-rtdb.firebaseio.com';
-
-export interface DeviceInfo {
-  deviceId: string;
-  project: string | null;
-  status: 'online' | 'offline';
-  lastSeen: number;
-  userAgent: string;
-}
-
-export interface RemoteCommand {
-  id: string;
-  targetDevice: string;
-  action: 'run';
-  project: string;
-  suite: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  createdAt: number;
-  result?: TestReport | null;
-}
+export type { DeviceInfo, RemoteCommand, CommandProgress };
 
 function getDeviceId(): string {
   let id = localStorage.getItem('autobot_device_id');
@@ -40,40 +25,13 @@ function getDeviceId(): string {
   return id;
 }
 
-export function setDeviceId(id: string): void {
+function setDeviceId(id: string): void {
   localStorage.setItem('autobot_device_id', id);
-}
-
-async function fbPut(path: string, data: any): Promise<void> {
-  await fetch(`${DB_URL}/${path}.json`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-}
-
-async function fbPatch(path: string, data: any): Promise<void> {
-  await fetch(`${DB_URL}/${path}.json`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-async function fbGet<T>(path: string): Promise<T | null> {
-  try {
-    const resp = await fetch(`${DB_URL}/${path}.json`);
-    if (!resp.ok) return null;
-    return await resp.json();
-  } catch { return null; }
-}
-
-async function fbDelete(path: string): Promise<void> {
-  await fetch(`${DB_URL}/${path}.json`, { method: 'DELETE' });
 }
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let eventSource: EventSource | null = null;
 let onCommandCallback: ((cmd: RemoteCommand) => void) | null = null;
-let onDeviceListCallback: ((devices: DeviceInfo[]) => void) | null = null;
 
 async function registerDevice(): Promise<void> {
   const deviceId = getDeviceId();
@@ -106,12 +64,17 @@ function stopHeartbeat(): void {
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 }
 
+function isCommandForMe(cmd: RemoteCommand): boolean {
+  const myId = getDeviceId();
+  if (cmd.targets && Array.isArray(cmd.targets)) return cmd.targets.includes(myId);
+  if ((cmd as any).targetDevice) return (cmd as any).targetDevice === myId;
+  return false;
+}
+
 function listenForCommands(): void {
   if (eventSource) eventSource.close();
 
-  const deviceId = getDeviceId();
-  const url = `${DB_URL}/commands.json?orderBy="targetDevice"&equalTo="${deviceId}"`;
-
+  const url = `${DB_URL}/commands.json`;
   eventSource = new EventSource(url);
 
   eventSource.addEventListener('put', (e: MessageEvent) => {
@@ -119,12 +82,13 @@ function listenForCommands(): void {
       const payload = JSON.parse(e.data);
       if (!payload.data) return;
 
-      const commands: Record<string, RemoteCommand> = typeof payload.data === 'object' && !payload.data.id
-        ? payload.data
-        : { [payload.path.replace('/', '')]: payload.data };
+      const commands: Record<string, RemoteCommand> =
+        typeof payload.data === 'object' && !payload.data.id
+          ? payload.data
+          : { [payload.path.replace('/', '')]: payload.data };
 
-      for (const [key, cmd] of Object.entries(commands)) {
-        if (cmd && cmd.status === 'pending') {
+      for (const [, cmd] of Object.entries(commands)) {
+        if (cmd && cmd.status === 'pending' && isCommandForMe(cmd)) {
           log('Received remote command:', cmd.id);
           onCommandCallback?.(cmd);
         }
@@ -140,7 +104,8 @@ function listenForCommands(): void {
       if (!payload.data) return;
       const cmd = payload.data as Partial<RemoteCommand>;
       if (cmd.status === 'pending' && cmd.id) {
-        onCommandCallback?.(cmd as RemoteCommand);
+        const full = cmd as RemoteCommand;
+        if (isCommandForMe(full)) onCommandCallback?.(full);
       }
     } catch {}
   });
@@ -152,42 +117,75 @@ function listenForCommands(): void {
   log('Listening for remote commands (SSE)');
 }
 
+async function reportProgress(cmdId: string, progress: CommandProgress): Promise<void> {
+  const deviceId = getDeviceId();
+  await fbPut(`results/${cmdId}/${deviceId}`, progress);
+}
+
 async function executeRemoteCommand(cmd: RemoteCommand): Promise<void> {
   await fbPatch(`commands/${cmd.id}`, { status: 'running' });
+  const deviceId = getDeviceId();
 
   try {
-    const manifest = await fbGet<any>(`devices/${cmd.targetDevice}`);
-    const suite = await fetchRemoteSuite(cmd.project, cmd.suite);
+    let suite: TestSuite | null = null;
+
+    if (cmd.suiteData) {
+      suite = cmd.suiteData as TestSuite;
+    } else {
+      suite = await fetchRemoteSuite(cmd.project, cmd.suite);
+    }
 
     if (!suite) {
-      await fbPatch(`commands/${cmd.id}`, { status: 'failed', result: { error: 'Suite not found' } });
+      await reportProgress(cmd.id, { status: 'failed', updatedAt: Date.now() });
+      await fbPatch(`commands/${cmd.id}`, { status: 'failed' });
       return;
     }
 
+    const total = suite.cases.length;
+    await reportProgress(cmd.id, {
+      status: 'running',
+      progress: { current: 0, total, currentCase: '' },
+      updatedAt: Date.now(),
+    });
+
     log('Executing remote command:', cmd.suite);
-    const results = await runSuite(suite, (msg) => log(`[remote] ${msg}`));
+    let completed = 0;
+    const results = await runSuite(suite, (msg) => {
+      log(`[remote] ${msg}`);
+      const match = msg.match(/^\((\d+)\/(\d+)\)\s+(.+)/);
+      if (match) {
+        completed = parseInt(match[1]);
+        reportProgress(cmd.id, {
+          status: 'running',
+          progress: { current: completed, total, currentCase: match[3] },
+          updatedAt: Date.now(),
+        });
+      }
+    });
+
     const report = generateReport(suite.name, results);
     printReportToConsole(report);
 
-    await fbPatch(`commands/${cmd.id}`, {
-      status: report.summary.failed > 0 ? 'failed' : 'completed',
-      result: {
-        suite: report.suite,
-        summary: report.summary,
-        duration: report.duration,
-        timestamp: report.timestamp,
-      },
+    const finalStatus = report.summary.failed > 0 ? 'failed' : 'completed';
+    await reportProgress(cmd.id, {
+      status: finalStatus,
+      summary: report.summary,
+      duration: report.duration,
+      report,
+      updatedAt: Date.now(),
     });
+    await fbPatch(`commands/${cmd.id}`, { status: finalStatus });
   } catch (e) {
-    await fbPatch(`commands/${cmd.id}`, { status: 'failed', result: { error: String(e) } });
+    await reportProgress(cmd.id, { status: 'failed', updatedAt: Date.now() });
+    await fbPatch(`commands/${cmd.id}`, { status: 'failed' });
   }
 }
 
-export async function sendCommand(targetDevice: string, project: string, suite: string): Promise<string> {
+async function sendCommand(targetDevice: string, project: string, suite: string): Promise<string> {
   const id = `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const cmd: RemoteCommand = {
     id,
-    targetDevice,
+    targets: [targetDevice],
     action: 'run',
     project,
     suite,
@@ -200,20 +198,20 @@ export async function sendCommand(targetDevice: string, project: string, suite: 
   return id;
 }
 
-export async function getOnlineDevices(): Promise<DeviceInfo[]> {
+async function getOnlineDevices(): Promise<DeviceInfo[]> {
   const data = await fbGet<Record<string, DeviceInfo>>('devices');
   if (!data) return [];
   const cutoff = Date.now() - 60000;
   return Object.values(data).filter(d => d.status === 'online' && d.lastSeen > cutoff);
 }
 
-export async function getCommands(): Promise<RemoteCommand[]> {
+async function getCommands(): Promise<RemoteCommand[]> {
   const data = await fbGet<Record<string, RemoteCommand>>('commands');
   if (!data) return [];
   return Object.values(data).sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
 }
 
-export async function cleanOldCommands(): Promise<void> {
+async function cleanOldCommands(): Promise<void> {
   const data = await fbGet<Record<string, RemoteCommand>>('commands');
   if (!data) return;
   const cutoff = Date.now() - 3600000;
@@ -222,11 +220,11 @@ export async function cleanOldCommands(): Promise<void> {
   }
 }
 
-export function onRemoteCommand(cb: (cmd: RemoteCommand) => void): void {
+function onRemoteCommand(cb: (cmd: RemoteCommand) => void): void {
   onCommandCallback = cb;
 }
 
-export async function startRemote(): Promise<void> {
+async function startRemote(): Promise<void> {
   await registerDevice();
   startHeartbeat();
   listenForCommands();
@@ -234,11 +232,15 @@ export async function startRemote(): Promise<void> {
   await cleanOldCommands();
 }
 
-export function stopRemote(): void {
+function stopRemote(): void {
   stopHeartbeat();
   if (eventSource) { eventSource.close(); eventSource = null; }
   const deviceId = getDeviceId();
   fbPatch(`devices/${deviceId}`, { status: 'offline' });
 }
 
-export { getDeviceId };
+export {
+  getDeviceId, setDeviceId,
+  getOnlineDevices, sendCommand, getCommands,
+  startRemote, stopRemote,
+};
