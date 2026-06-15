@@ -32,7 +32,7 @@ function renderProjectSelector(container: HTMLElement): string {
       <option value="">-- Select project --</option>
       ${options}
     </select>
-    <button id="test-refresh-btn" style="padding:4px 8px;font-size:10px">🔄</button>
+    <button type="button" id="test-refresh-btn" style="padding:4px 8px;font-size:10px">🔄</button>
   </div>`;
 }
 
@@ -41,7 +41,7 @@ function renderRemoteSuites(): string {
   return remoteSuites.map((s, i) => `
     <div class="saved-item" data-remote-idx="${i}">
       <span class="name">📋 ${esc(s.name)} (${countCases(s)})</span>
-      <button class="green btn-run-remote" data-idx="${i}" title="Run">▶</button>
+      <button type="button" class="green btn-run-remote" data-idx="${i}" title="Run">▶</button>
     </div>
   `).join('');
 }
@@ -51,10 +51,10 @@ function renderLocalSuites(suites: TestSuite[]): string {
   return suites.map(s => `
     <div class="saved-item" data-local-name="${esc(s.name)}">
       <span class="name">📝 ${esc(s.name)} (${countCases(s)})</span>
-      <button class="green btn-run-local" data-name="${esc(s.name)}" title="Run">▶</button>
-      <button class="btn-copy-local" data-name="${esc(s.name)}" title="Copy JSON">📋</button>
-      <button class="btn-dl-local" data-name="${esc(s.name)}" title="Download">↓</button>
-      <button class="warn btn-del-local" data-name="${esc(s.name)}" title="Delete">✕</button>
+      <button type="button" class="green btn-run-local" data-name="${esc(s.name)}" title="Run">▶</button>
+      <button type="button" class="btn-copy-local" data-name="${esc(s.name)}" title="Copy JSON">📋</button>
+      <button type="button" class="btn-dl-local" data-name="${esc(s.name)}" title="Download">↓</button>
+      <button type="button" class="warn btn-del-local" data-name="${esc(s.name)}" title="Delete">✕</button>
     </div>
   `).join('');
 }
@@ -104,22 +104,22 @@ async function renderTestingPanel(container: HTMLElement) {
         <div id="test-local-list">${localHTML}</div>
 
         <div class="row" style="margin-top:6px;gap:4px">
-          <button id="test-import-btn" class="wide" style="font-size:10px">Import file</button>
-          <button id="test-paste-btn" class="wide" style="font-size:10px">Paste JSON</button>
+          <button type="button" id="test-import-btn" class="wide" style="font-size:10px">Import file</button>
+          <button type="button" id="test-paste-btn" class="wide" style="font-size:10px">Paste JSON</button>
         </div>
         <input type="file" id="test-file-input" accept=".json" style="display:none">
 
         ${remoteSuites.length > 0 ? `
         <div style="margin-top:6px;border-top:1px solid #333;padding-top:4px">
           <div class="row" style="gap:4px">
-            <button id="test-run-all-btn" class="accent wide" style="font-size:10px">Run all</button>
+            <button type="button" id="test-run-all-btn" class="accent wide" style="font-size:10px">Run all</button>
           </div>
         </div>` : ''}
 
         ${resultsHTML ? `
         <div style="margin-top:6px;border-top:1px solid #333;padding-top:4px">
           ${resultsHTML}
-          <button id="test-export-report-btn" style="font-size:10px;margin-top:4px">Export report</button>
+          <button type="button" id="test-export-report-btn" style="font-size:10px;margin-top:4px">Export report</button>
         </div>` : ''}
       </div></div>
     </div>
