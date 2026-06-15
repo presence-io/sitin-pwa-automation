@@ -31,6 +31,8 @@ function setDeviceId(id: string): void {
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let eventSource: EventSource | null = null;
+let sseHealthTimer: ReturnType<typeof setInterval> | null = null;
+let lastSSEEvent = 0;
 let onCommandCallback: ((cmd: RemoteCommand) => void) | null = null;
 
 async function registerDevice(): Promise<void> {
@@ -73,46 +75,66 @@ function isCommandForMe(cmd: RemoteCommand): boolean {
 
 function listenForCommands(): void {
   if (eventSource) eventSource.close();
+  if (sseHealthTimer) { clearInterval(sseHealthTimer); sseHealthTimer = null; }
 
-  const url = `${DB_URL}/commands.json`;
-  eventSource = new EventSource(url);
+  function connect() {
+    const url = `${DB_URL}/commands.json`;
+    eventSource = new EventSource(url);
+    lastSSEEvent = Date.now();
 
-  eventSource.addEventListener('put', (e: MessageEvent) => {
-    try {
-      const payload = JSON.parse(e.data);
-      if (!payload.data) return;
+    eventSource.addEventListener('put', (e: MessageEvent) => {
+      lastSSEEvent = Date.now();
+      try {
+        const payload = JSON.parse(e.data);
+        if (!payload.data) return;
 
-      const commands: Record<string, RemoteCommand> =
-        typeof payload.data === 'object' && !payload.data.id
-          ? payload.data
-          : { [payload.path.replace('/', '')]: payload.data };
+        const commands: Record<string, RemoteCommand> =
+          typeof payload.data === 'object' && !payload.data.id
+            ? payload.data
+            : { [payload.path.replace('/', '')]: payload.data };
 
-      for (const [, cmd] of Object.entries(commands)) {
-        if (cmd && cmd.status === 'pending' && isCommandForMe(cmd)) {
-          log('Received remote command:', cmd.id);
-          onCommandCallback?.(cmd);
+        for (const [, cmd] of Object.entries(commands)) {
+          if (cmd && cmd.status === 'pending' && isCommandForMe(cmd)) {
+            log('Received remote command:', cmd.id);
+            onCommandCallback?.(cmd);
+          }
         }
+      } catch (err) {
+        warn('SSE parse error:', err);
       }
-    } catch (err) {
-      warn('SSE parse error:', err);
+    });
+
+    eventSource.addEventListener('patch', (e: MessageEvent) => {
+      lastSSEEvent = Date.now();
+      try {
+        const payload = JSON.parse(e.data);
+        if (!payload.data) return;
+        const cmd = payload.data as Partial<RemoteCommand>;
+        if (cmd.status === 'pending' && cmd.id) {
+          const full = cmd as RemoteCommand;
+          if (isCommandForMe(full)) onCommandCallback?.(full);
+        }
+      } catch {}
+    });
+
+    eventSource.addEventListener('keep-alive', () => { lastSSEEvent = Date.now(); });
+
+    eventSource.onerror = () => {
+      lastSSEEvent = Date.now();
+      warn('SSE connection error, will auto-reconnect');
+    };
+  }
+
+  connect();
+
+  // Health check: if no SSE event in 90s, force reconnect
+  sseHealthTimer = setInterval(() => {
+    if (Date.now() - lastSSEEvent > 90000) {
+      log('SSE stale, reconnecting...');
+      if (eventSource) eventSource.close();
+      connect();
     }
-  });
-
-  eventSource.addEventListener('patch', (e: MessageEvent) => {
-    try {
-      const payload = JSON.parse(e.data);
-      if (!payload.data) return;
-      const cmd = payload.data as Partial<RemoteCommand>;
-      if (cmd.status === 'pending' && cmd.id) {
-        const full = cmd as RemoteCommand;
-        if (isCommandForMe(full)) onCommandCallback?.(full);
-      }
-    } catch {}
-  });
-
-  eventSource.onerror = () => {
-    warn('SSE connection error, will auto-reconnect');
-  };
+  }, 60000);
 
   log('Listening for remote commands (SSE)');
 }
@@ -234,6 +256,7 @@ async function startRemote(): Promise<void> {
 
 function stopRemote(): void {
   stopHeartbeat();
+  if (sseHealthTimer) { clearInterval(sseHealthTimer); sseHealthTimer = null; }
   if (eventSource) { eventSource.close(); eventSource = null; }
   const deviceId = getDeviceId();
   fbPatch(`devices/${deviceId}`, { status: 'offline' });

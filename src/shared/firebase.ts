@@ -21,13 +21,44 @@ export async function fbDelete(path: string): Promise<void> {
 }
 
 export function fbListen(path: string, onEvent: (data: any) => void): EventSource {
-  const source = new EventSource(`${DB_URL}/${path}.json`);
-  source.addEventListener('put', (e: MessageEvent) => {
-    try { onEvent(JSON.parse(e.data)); } catch {}
-  });
-  source.addEventListener('patch', (e: MessageEvent) => {
-    try { onEvent(JSON.parse(e.data)); } catch {}
-  });
+  let source = createSource();
+  let lastEventTime = Date.now();
+  let healthCheck: ReturnType<typeof setInterval> | null = null;
+
+  function createSource(): EventSource {
+    const s = new EventSource(`${DB_URL}/${path}.json`);
+    s.addEventListener('put', (e: MessageEvent) => {
+      lastEventTime = Date.now();
+      try { onEvent(JSON.parse(e.data)); } catch {}
+    });
+    s.addEventListener('patch', (e: MessageEvent) => {
+      lastEventTime = Date.now();
+      try { onEvent(JSON.parse(e.data)); } catch {}
+    });
+    s.addEventListener('keep-alive', () => { lastEventTime = Date.now(); });
+    s.onerror = () => {
+      // EventSource auto-reconnects on error, just track the time
+      lastEventTime = Date.now();
+    };
+    return s;
+  }
+
+  // Check every 60s — if no event received in 90s, force reconnect
+  healthCheck = setInterval(() => {
+    if (Date.now() - lastEventTime > 90000) {
+      source.close();
+      source = createSource();
+      lastEventTime = Date.now();
+    }
+  }, 60000);
+
+  // Override close to also clear the health check
+  const origClose = source.close.bind(source);
+  source.close = () => {
+    if (healthCheck) { clearInterval(healthCheck); healthCheck = null; }
+    origClose();
+  };
+
   return source;
 }
 
