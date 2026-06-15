@@ -386,8 +386,20 @@ function renderHistory(): void {
       <span class="device">${esc(targets)}</span>
       <span class="detail">${esc(cmd.suite)} · ${esc(cmd.status)}</span>
       <span class="time">${time}</span>
+      <button class="preview-btn btn-del-history" data-cmd-id="${esc(cmd.id)}" title="Delete" style="color:#f85149">✕</button>
     </div>`;
   }).join('');
+
+  el.querySelectorAll('.btn-del-history').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cmdId = (btn as HTMLElement).dataset.cmdId!;
+      if (!confirm('Delete this command and its results?')) return;
+      await fbDelete(`commands/${cmdId}`);
+      await fbDelete(`results/${cmdId}`);
+      await refreshHistory();
+    });
+  });
 }
 
 // ── Modals ──
@@ -872,6 +884,12 @@ async function init(): Promise<void> {
 
   document.getElementById('btn-refresh-devices')!.addEventListener('click', refreshDevices);
   document.getElementById('btn-refresh-history')!.addEventListener('click', refreshHistory);
+  document.getElementById('btn-clear-history')!.addEventListener('click', async () => {
+    if (!confirm('Clear all command history and results?')) return;
+    await fbDelete('commands');
+    await fbDelete('results');
+    await refreshHistory();
+  });
   document.getElementById('btn-run')!.addEventListener('click', runOnDevices);
   document.getElementById('btn-connect-help')!.addEventListener('click', showConnectHelp);
   document.getElementById('btn-paste')!.addEventListener('click', showPasteModal);
