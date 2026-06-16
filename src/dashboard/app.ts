@@ -64,9 +64,14 @@ async function fetchSuite(projectId: string, file: string): Promise<any> {
 
 // ── Devices ──
 
+let devicesDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 function startDeviceListener(): void {
   if (devicesSource) devicesSource.close();
-  devicesSource = fbListen('devices', () => refreshDevices());
+  devicesSource = fbListen('devices', () => {
+    if (devicesDebounceTimer) clearTimeout(devicesDebounceTimer);
+    devicesDebounceTimer = setTimeout(() => refreshDevices(), 2000);
+  });
   refreshDevices();
 }
 
@@ -1034,6 +1039,111 @@ ${sampleJSON}
 6. Use the "call" action for cleanup functions like "deleteAccount", "clearLocalStorage"`;
 }
 
+function showGuide(): void {
+  showModal('AutoBot Guide', `
+<div style="font-size:13px;line-height:1.7;color:#c9d1d9">
+
+<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">Quick Start</h3>
+
+<p><strong style="color:#e6edf3">1. Connect a device</strong></p>
+<p style="color:#8b949e">Open the target web page's DevTools Console and paste:</p>
+<pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto;cursor:pointer" onclick="navigator.clipboard.writeText(this.innerText);this.style.borderColor='#3fb950';setTimeout(()=>this.style.borderColor='#30363d',1000)">fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})</pre>
+<p style="color:#8b949e;font-size:11px">Click to copy. The device will appear in the Devices section above within seconds.</p>
+
+<p><strong style="color:#e6edf3">2. Select devices & suites</strong></p>
+<p style="color:#8b949e">Check the devices you want to target, then select a test suite from the list. Click <strong style="color:#3fb950">▶ Run on selected devices</strong> to execute.</p>
+
+<p><strong style="color:#e6edf3">3. View results</strong></p>
+<p style="color:#8b949e">Results appear in real-time in the Results section. Click <strong>Report</strong> for full details including step-by-step results, screenshots, and tracked events with params.</p>
+
+<hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
+
+<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">Features</h3>
+
+<p><strong style="color:#e6edf3">📱 Devices</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>Online devices show a green dot, offline show red</li>
+  <li>Click <strong>👁</strong> to view the device's live screen (screenshot sync)</li>
+  <li>Check multiple devices to run tests on all of them simultaneously</li>
+</ul>
+
+<p><strong style="color:#e6edf3">📋 Test Suites</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li><strong>Remote suites</strong> — loaded from GitHub Pages (read-only)</li>
+  <li><strong>🔥 Firebase suites</strong> — uploaded by agents or dashboard, editable and deletable</li>
+  <li><strong>📹 Recordings</strong> — recorded on devices, synced via Firebase</li>
+  <li><strong>Preview</strong> — click to view/edit JSON, Save to persist changes</li>
+  <li><strong>Import / Paste JSON</strong> — add suites from files or clipboard</li>
+</ul>
+
+<p><strong style="color:#e6edf3">✨ AI Generate</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>Describe a test scenario in natural language</li>
+  <li>Click Generate Prompt — auto-includes project config and TestAction schema</li>
+  <li>Copy to Claude/ChatGPT → paste the generated JSON back → Import</li>
+</ul>
+
+<p><strong style="color:#e6edf3">🚀 Stages (GraceChat)</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>Stage 1-5 preset flows for account lifecycle testing</li>
+  <li>Click individual <strong>▶</strong> to run one stage, or <strong>Run S1→S5 All</strong> for the full sequence</li>
+  <li>Progress updates in real-time per device</li>
+  <li>Stages are editable JSON — edit in Preview to change the flow</li>
+</ul>
+
+<p><strong style="color:#e6edf3">📊 Results & History</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li><strong>Results</strong> — live execution results, restored on page refresh</li>
+  <li><strong>History</strong> — all past commands with Report buttons</li>
+  <li><strong>Report</strong> — pass rate, per-case steps, failure screenshots, tracked events with params</li>
+  <li>Delete individual items or Clear all</li>
+</ul>
+
+<hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
+
+<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">Agent (Device Side)</h3>
+
+<p><strong style="color:#e6edf3">Recording</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>Open the AutoBot panel → Teaching mode → Start recording</li>
+  <li>Operate the page normally — clicks, inputs, navigation are captured</li>
+  <li>Click <strong>+Assert</strong> on minibar to insert assertions (URL, text, events)</li>
+  <li>Stop recording → save → click <strong>🧪</strong> to convert to test suite</li>
+  <li>Recordings and converted suites auto-sync to Firebase → visible in Dashboard</li>
+</ul>
+
+<p><strong style="color:#e6edf3">Available call functions</strong></p>
+<table style="font-size:11px;border-collapse:collapse;width:100%;margin:6px 0">
+  <tr style="border-bottom:1px solid #30363d;color:#8b949e"><th style="padding:4px;text-align:left">Function</th><th style="padding:4px;text-align:left">Args</th><th style="padding:4px;text-align:left">Description</th></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">deleteAccount</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Delete current account via /debug</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">quickLogin</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Quick login on /onboarding</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">onboarding</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Complete registration flow</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">cashout</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Trigger cashout + dismiss modals</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">completeTask</td><td style="padding:4px">[taskId, label]</td><td style="padding:4px;color:#8b949e">Complete a task via debug page</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCallsAuto</td><td style="padding:4px">[earn$, durationMin]</td><td style="padding:4px;color:#8b949e">Auto-calculate mock calls needed</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCalls</td><td style="padding:4px">[count]</td><td style="padding:4px;color:#8b949e">Run exact N mock calls</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">clearLocalStorage</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Clear localStorage (keep autobot)</td></tr>
+  <tr><td style="padding:4px;color:#58a6ff">clearAll</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Clear all browser storage</td></tr>
+</table>
+
+<p><strong style="color:#e6edf3">Test case format example</strong></p>
+<pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto">{
+  "name": "My Test",
+  "cases": [{
+    "name": "Login and verify",
+    "steps": [
+      { "action": "navigate", "url": "/login" },
+      { "action": "click", "locators": [{"type":"text","value":"Quick Login"}], "tag": "button" },
+      { "action": "assert", "assertType": "url", "expected": "/home" },
+      { "action": "assert", "assertType": "eventFired", "sdk": "rangers", "event": "login_success" }
+    ]
+  }]
+}</pre>
+
+</div>
+  `);
+}
+
 function showConnectHelp(): void {
   const script = `fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})`;
   showModal('Add Device', `
@@ -1227,6 +1337,7 @@ async function init(): Promise<void> {
   });
   document.getElementById('btn-run')!.addEventListener('click', runOnDevices);
   document.getElementById('btn-connect-help')!.addEventListener('click', showConnectHelp);
+  document.getElementById('btn-guide')!.addEventListener('click', showGuide);
   document.getElementById('btn-paste')!.addEventListener('click', showPasteModal);
   document.getElementById('btn-ai-gen')!.addEventListener('click', showAIGenerate);
 
@@ -1264,7 +1375,7 @@ async function init(): Promise<void> {
     fileInput.value = '';
   });
 
-  setInterval(refreshDevices, 30000);
+  setInterval(refreshDevices, 60000);
 }
 
 init();
