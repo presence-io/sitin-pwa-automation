@@ -199,6 +199,7 @@ export class Recorder {
     document.addEventListener('input', this.handleInput, { capture: true, signal });
     document.addEventListener('change', this.handleChange, { capture: true, signal });
     window.addEventListener('popstate', this.handleNav, { signal });
+    window.addEventListener('scroll', this.handleScroll, { capture: true, passive: true, signal } as any);
 
     log('Recorder started');
   }
@@ -304,5 +305,23 @@ export class Recorder {
       url: location.pathname + location.search + location.hash,
       delay: 0,
     });
+  };
+
+  private scrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private handleScroll = () => {
+    if (!this.recording) return;
+    if (this.scrollTimer) clearTimeout(this.scrollTimer);
+    this.scrollTimer = setTimeout(() => {
+      if (!this.recording) return;
+      this.addStep({
+        type: 'scroll',
+        locators: [],
+        tag: '',
+        scrollX: Math.round(window.scrollX),
+        scrollY: Math.round(window.scrollY),
+        delay: 0,
+      });
+    }, 300);
   };
 }

@@ -1040,97 +1040,98 @@ ${sampleJSON}
 }
 
 function showGuide(): void {
-  showModal('AutoBot Guide', `
+  showModal('AutoBot 使用指南', `
 <div style="font-size:13px;line-height:1.7;color:#c9d1d9">
 
-<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">Quick Start</h3>
+<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">快速开始</h3>
 
-<p><strong style="color:#e6edf3">1. Connect a device</strong></p>
-<p style="color:#8b949e">Open the target web page's DevTools Console and paste:</p>
+<p><strong style="color:#e6edf3">1. 连接设备</strong></p>
+<p style="color:#8b949e">在目标网页的 DevTools Console 中粘贴以下代码：</p>
 <pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto;cursor:pointer" onclick="navigator.clipboard.writeText(this.innerText);this.style.borderColor='#3fb950';setTimeout(()=>this.style.borderColor='#30363d',1000)">fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})</pre>
-<p style="color:#8b949e;font-size:11px">Click to copy. The device will appear in the Devices section above within seconds.</p>
+<p style="color:#8b949e;font-size:11px">点击代码块可复制。设备将在数秒内出现在上方设备列表中。</p>
 
-<p><strong style="color:#e6edf3">2. Select devices & suites</strong></p>
-<p style="color:#8b949e">Check the devices you want to target, then select a test suite from the list. Click <strong style="color:#3fb950">▶ Run on selected devices</strong> to execute.</p>
+<p><strong style="color:#e6edf3">2. 选择设备和用例</strong></p>
+<p style="color:#8b949e">勾选目标设备，然后从列表中选择测试用例。点击 <strong style="color:#3fb950">▶ Run on selected devices</strong> 开始执行。</p>
 
-<p><strong style="color:#e6edf3">3. View results</strong></p>
-<p style="color:#8b949e">Results appear in real-time in the Results section. Click <strong>Report</strong> for full details including step-by-step results, screenshots, and tracked events with params.</p>
-
-<hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
-
-<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">Features</h3>
-
-<p><strong style="color:#e6edf3">📱 Devices</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
-  <li>Online devices show a green dot, offline show red</li>
-  <li>Click <strong>👁</strong> to view the device's live screen (screenshot sync)</li>
-  <li>Check multiple devices to run tests on all of them simultaneously</li>
-</ul>
-
-<p><strong style="color:#e6edf3">📋 Test Suites</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
-  <li><strong>Remote suites</strong> — loaded from GitHub Pages (read-only)</li>
-  <li><strong>🔥 Firebase suites</strong> — uploaded by agents or dashboard, editable and deletable</li>
-  <li><strong>📹 Recordings</strong> — recorded on devices, synced via Firebase</li>
-  <li><strong>Preview</strong> — click to view/edit JSON, Save to persist changes</li>
-  <li><strong>Import / Paste JSON</strong> — add suites from files or clipboard</li>
-</ul>
-
-<p><strong style="color:#e6edf3">✨ AI Generate</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
-  <li>Describe a test scenario in natural language</li>
-  <li>Click Generate Prompt — auto-includes project config and TestAction schema</li>
-  <li>Copy to Claude/ChatGPT → paste the generated JSON back → Import</li>
-</ul>
-
-<p><strong style="color:#e6edf3">🚀 Stages (GraceChat)</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
-  <li>Stage 1-5 preset flows for account lifecycle testing</li>
-  <li>Click individual <strong>▶</strong> to run one stage, or <strong>Run S1→S5 All</strong> for the full sequence</li>
-  <li>Progress updates in real-time per device</li>
-  <li>Stages are editable JSON — edit in Preview to change the flow</li>
-</ul>
-
-<p><strong style="color:#e6edf3">📊 Results & History</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
-  <li><strong>Results</strong> — live execution results, restored on page refresh</li>
-  <li><strong>History</strong> — all past commands with Report buttons</li>
-  <li><strong>Report</strong> — pass rate, per-case steps, failure screenshots, tracked events with params</li>
-  <li>Delete individual items or Clear all</li>
-</ul>
+<p><strong style="color:#e6edf3">3. 查看结果</strong></p>
+<p style="color:#8b949e">结果实时显示在 Results 区域。点击 <strong>Report</strong> 查看详细报告：逐步结果、失败截图、埋点事件及参数。</p>
 
 <hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
 
-<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">Agent (Device Side)</h3>
+<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">功能说明</h3>
 
-<p><strong style="color:#e6edf3">Recording</strong></p>
+<p><strong style="color:#e6edf3">📱 设备管理</strong></p>
 <ul style="color:#8b949e;padding-left:20px;margin:4px 0">
-  <li>Open the AutoBot panel → Teaching mode → Start recording</li>
-  <li>Operate the page normally — clicks, inputs, navigation are captured</li>
-  <li>Click <strong>+Assert</strong> on minibar to insert assertions (URL, text, events)</li>
-  <li>Stop recording → save → click <strong>🧪</strong> to convert to test suite</li>
-  <li>Recordings and converted suites auto-sync to Firebase → visible in Dashboard</li>
+  <li>在线设备显示绿色圆点，离线显示红色</li>
+  <li>点击 <strong>👁</strong> 实时查看设备当前页面截图</li>
+  <li>可勾选多台设备同时执行测试</li>
 </ul>
 
-<p><strong style="color:#e6edf3">Available call functions</strong></p>
+<p><strong style="color:#e6edf3">📋 测试用例</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li><strong>远程用例</strong> — 从 GitHub Pages 加载（只读）</li>
+  <li><strong>🔥 Firebase 用例</strong> — Agent 或 Dashboard 上传的，可编辑/删除</li>
+  <li><strong>📹 录制</strong> — 在设备端录制的操作流程，通过 Firebase 同步</li>
+  <li><strong>Preview</strong> — 点击查看/编辑 JSON，Save 保存修改</li>
+  <li><strong>Import / Paste JSON</strong> — 从文件或剪贴板导入用例</li>
+</ul>
+
+<p><strong style="color:#e6edf3">✨ AI 生成</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>用自然语言描述测试场景</li>
+  <li>点击 Generate Prompt — 自动注入项目配置和用例格式规范</li>
+  <li>复制到 Claude/ChatGPT → 将生成的 JSON 粘贴回来 → 导入</li>
+</ul>
+
+<p><strong style="color:#e6edf3">🚀 阶段任务 (Stages)</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>Stage 1-5 预设流程，覆盖注册→提现的完整生命周期</li>
+  <li>点击单个 <strong>▶</strong> 执行某个阶段，或 <strong>Run S1→S5 All</strong> 全部执行</li>
+  <li>每台设备的进度实时更新</li>
+  <li>阶段流程是可编辑的 JSON — 在 Preview 中修改即可</li>
+</ul>
+
+<p><strong style="color:#e6edf3">📊 结果与历史</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li><strong>Results</strong> — 实时执行结果，刷新页面后自动恢复</li>
+  <li><strong>History</strong> — 所有历史命令，每条都有 Report 按钮</li>
+  <li><strong>Report</strong> — 通过率、逐步结果、失败截图、埋点事件及完整参数</li>
+  <li>可单条删除或清空全部</li>
+</ul>
+
+<hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
+
+<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">设备端 (Agent)</h3>
+
+<p><strong style="color:#e6edf3">录制操作</strong></p>
+<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+  <li>打开 AutoBot 面板 → 教学模式 → 开始录制</li>
+  <li>正常操作页面 — 点击、输入、滚动、导航全部自动捕获</li>
+  <li>点击列表项时会弹出文本选择器，选择用于匹配的稳定文本</li>
+  <li>点击 minibar 上的 <strong>[+断言]</strong> 插入断言（URL / 文案 / 埋点事件）</li>
+  <li>停止录制 → 保存 → 点击 <strong>🧪</strong> 转为测试用例</li>
+  <li>录制和转换的用例自动同步到 Firebase，Dashboard 中可见</li>
+</ul>
+
+<p><strong style="color:#e6edf3">可用的 call 函数</strong></p>
 <table style="font-size:11px;border-collapse:collapse;width:100%;margin:6px 0">
-  <tr style="border-bottom:1px solid #30363d;color:#8b949e"><th style="padding:4px;text-align:left">Function</th><th style="padding:4px;text-align:left">Args</th><th style="padding:4px;text-align:left">Description</th></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">deleteAccount</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Delete current account via /debug</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">quickLogin</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Quick login on /onboarding</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">onboarding</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Complete registration flow</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">cashout</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Trigger cashout + dismiss modals</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">completeTask</td><td style="padding:4px">[taskId, label]</td><td style="padding:4px;color:#8b949e">Complete a task via debug page</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCallsAuto</td><td style="padding:4px">[earn$, durationMin]</td><td style="padding:4px;color:#8b949e">Auto-calculate mock calls needed</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCalls</td><td style="padding:4px">[count]</td><td style="padding:4px;color:#8b949e">Run exact N mock calls</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">clearLocalStorage</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Clear localStorage (keep autobot)</td></tr>
-  <tr><td style="padding:4px;color:#58a6ff">clearAll</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">Clear all browser storage</td></tr>
+  <tr style="border-bottom:1px solid #30363d;color:#8b949e"><th style="padding:4px;text-align:left">函数名</th><th style="padding:4px;text-align:left">参数</th><th style="padding:4px;text-align:left">说明</th></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">deleteAccount</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">注销当前账号（通过 /debug 页面）</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">quickLogin</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">快速登录</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">onboarding</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">自动完成注册流程</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">cashout</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">触发提现 + 自动关闭弹窗</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">completeTask</td><td style="padding:4px">[taskId, label]</td><td style="padding:4px;color:#8b949e">通过 Debug 页面完成指定任务</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCallsAuto</td><td style="padding:4px">[收益$, 时长min]</td><td style="padding:4px;color:#8b949e">自动计算所需 Mock Call 次数</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCalls</td><td style="padding:4px">[count]</td><td style="padding:4px;color:#8b949e">执行指定次数的 Mock Call</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">clearLocalStorage</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">清除 localStorage（保留 autobot 配置）</td></tr>
+  <tr><td style="padding:4px;color:#58a6ff">clearAll</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">清除所有浏览器存储</td></tr>
 </table>
 
-<p><strong style="color:#e6edf3">Test case format example</strong></p>
+<p><strong style="color:#e6edf3">测试用例格式示例</strong></p>
 <pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto">{
-  "name": "My Test",
+  "name": "登录验证",
   "cases": [{
-    "name": "Login and verify",
+    "name": "快速登录并检查埋点",
     "steps": [
       { "action": "navigate", "url": "/login" },
       { "action": "click", "locators": [{"type":"text","value":"Quick Login"}], "tag": "button" },
@@ -1139,6 +1140,19 @@ function showGuide(): void {
     ]
   }]
 }</pre>
+
+<p><strong style="color:#e6edf3">支持的操作类型</strong></p>
+<table style="font-size:11px;border-collapse:collapse;width:100%;margin:6px 0">
+  <tr style="border-bottom:1px solid #30363d;color:#8b949e"><th style="padding:4px;text-align:left">操作</th><th style="padding:4px;text-align:left">说明</th><th style="padding:4px;text-align:left">录制方式</th></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">click</td><td style="padding:4px;color:#8b949e">点击元素</td><td style="padding:4px;color:#8b949e">自动捕获</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">input</td><td style="padding:4px;color:#8b949e">输入文字</td><td style="padding:4px;color:#8b949e">自动捕获（连续输入合并）</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">scroll</td><td style="padding:4px;color:#8b949e">页面滚动</td><td style="padding:4px;color:#8b949e">自动捕获（300ms 防抖）</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">navigate</td><td style="padding:4px;color:#8b949e">页面跳转</td><td style="padding:4px;color:#8b949e">自动捕获（SPA 路由）</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">select</td><td style="padding:4px;color:#8b949e">下拉选择</td><td style="padding:4px;color:#8b949e">自动捕获</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">assert</td><td style="padding:4px;color:#8b949e">插入断言</td><td style="padding:4px;color:#8b949e">手动（minibar [+断言]）</td></tr>
+  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">wait</td><td style="padding:4px;color:#8b949e">等待 N 毫秒</td><td style="padding:4px;color:#8b949e">手写 JSON</td></tr>
+  <tr><td style="padding:4px;color:#58a6ff">call</td><td style="padding:4px;color:#8b949e">调用内置函数</td><td style="padding:4px;color:#8b949e">手写 JSON</td></tr>
+</table>
 
 </div>
   `);
