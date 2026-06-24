@@ -11,6 +11,7 @@
 - **分项目管理** — 按项目隔离用例和配置，远程加载 + 本地存储
 - **录制回放** — 录制操作流程，自动生成多 Locator 步骤
 - **一键分享** — 复制 JSON / 导出文件 / 提交到用例仓库
+- **远程看板** — Dashboard 实时查看设备屏幕（rrweb DOM 回放）与 Console 日志，支持单步回放、日志搜索高亮
 
 ## 快速开始
 
@@ -63,7 +64,16 @@ src/
     runner.ts       # 用例执行器（生命周期编排）
     reporter.ts     # JSON 报告 + 控制台摘要
     repository.ts   # 远程用例拉取 + 本地管理
+    screensync.ts   # 屏幕同步（rrweb 录制 → Firebase）
+    logsync.ts      # Console 日志采集（控制台/异常 → Firebase）
+    remote.ts       # 设备注册 + 远程命令
     ui.ts           # 测试模式面板
+  shared/           # Agent / Dashboard 共享
+    firebase.ts     # Firebase RTDB REST + SSE 封装
+    rrweb-loader.ts # rrweb 按需 CDN 加载
+  dashboard/        # 远程控制看板（GitHub Pages）
+    app.ts          # 设备列表 + 屏幕回放 + Console 面板
+    index.html
   ui/               # 面板 + 样式
   main.ts           # 入口
 tests/              # 测试用例仓库
@@ -128,6 +138,24 @@ docs/               # 设计文档
   ]
 }
 ```
+
+## 远程看板（Dashboard）
+
+通过 Firebase RTDB 在 Dashboard 与注入设备之间建立实时通道，用于远程观察测试执行。
+
+- **屏幕同步** — Agent 用 [rrweb](https://github.com/rrweb-io/rrweb) 录制 DOM 变更（非截图，避免跨域污染），按滚动窗口推送到 `screens/{deviceId}`；Dashboard 用 `Replayer` 重建画面。rrweb 在打开同步时才从 CDN 按需加载，注入脚本体积不变。
+- **单步回放** — 画面下方提供 `⏮ ⏪ ▶/⏸ ⏩` 与进度条：按录制事件逐帧单步、连续播放或拖动定位；操作即退出"跟随"并冻结当前窗口便于排查，点"跟随"恢复实时最新画面。
+- **Console 日志** — Agent 劫持 `console.*` 及 `error`/`unhandledrejection` 写入环形缓冲，随同步推送到 `logs/{deviceId}`；Dashboard 面板支持按级别过滤、关键词搜索 + 高亮、"仅匹配"、清空。
+
+数据通道（Firebase RTDB）：
+
+| 路径 | 方向 | 说明 |
+|------|------|------|
+| `devices/{id}` | Agent → | 设备在线注册 |
+| `syncControl/{id}` | Dashboard → | `{screenSync, logSync, fps}` 同步开关 |
+| `screens/{id}` | Agent → | rrweb 事件窗口 |
+| `logs/{id}` | Agent → | Console 日志条目 |
+| `commands/{id}` | Dashboard → | 远程命令 |
 
 ## 构建 & 部署
 

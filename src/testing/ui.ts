@@ -20,11 +20,11 @@ let lastReport: TestReport | null = null;
 function renderResults(): string {
   if (!lastReport) return '';
   const { summary } = lastReport;
-  const color = summary.failed > 0 ? '#ff6b6b' : '#69db7c';
+  const color = summary.failed > 0 ? '#cf222e' : '#1a7f37';
   let html = `<div style="font-size:11px;color:${color};margin-bottom:4px">${summary.passed}/${summary.total} passed (${(lastReport.duration / 1000).toFixed(1)}s)</div>`;
   for (const r of lastReport.results) {
     if (r.status === 'failed') {
-      html += `<div style="font-size:10px;color:#ff6b6b">⚠ ${esc(r.name)} — ${esc(r.error ?? 'failed')}</div>`;
+      html += `<div style="font-size:10px;color:#cf222e">⚠ ${esc(r.name)} — ${esc(r.error ?? 'failed')}</div>`;
     }
   }
   return html;
@@ -51,12 +51,12 @@ async function renderTestingPanel(container: HTMLElement) {
       <div class="grp-hdr" data-grp="agent"><span>📡 Agent</span><span class="arr open">▶</span></div>
       <div class="grp-body open"><div class="inner">
         <div class="row" style="gap:4px;align-items:center">
-          <span style="font-size:10px;color:#888;white-space:nowrap">Device:</span>
-          <input id="agent-device-id" value="${esc(deviceId)}" style="flex:1;padding:3px 6px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;font-size:10px">
-          <button type="button" id="agent-save-id" style="padding:3px 8px;font-size:10px">Save</button>
+          <span style="font-size:10px;color:#656d76;white-space:nowrap">Device:</span>
+          <input id="agent-device-id" value="${esc(deviceId)}" style="flex:1;padding:5px 7px;background:#fff;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:10px;margin-bottom:0">
+          <button type="button" id="agent-save-id" style="padding:5px 8px;font-size:10px">Save</button>
         </div>
-        <div style="font-size:10px;color:#69db7c;margin:4px 0">🟢 Online${project ? ` · ${esc(project)}` : ''}</div>
-        <div style="font-size:9px;color:#484f58;margin-bottom:4px">Dashboard: <a href="https://presence-io.github.io/sitin-pwa-automation/dashboard.html" target="_blank" style="color:#58a6ff">Open ↗</a></div>
+        <div style="font-size:10px;color:#1a7f37;margin:6px 0">● Online${project ? ` · ${esc(project)}` : ''}</div>
+        <div style="font-size:9px;color:#8c959f;margin-bottom:4px">Dashboard: <a href="https://presence-io.github.io/sitin-pwa-automation/dashboard.html" target="_blank" style="color:#0969da">Open ↗</a></div>
       </div></div>
     </div>
 

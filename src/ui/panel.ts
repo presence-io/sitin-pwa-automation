@@ -178,7 +178,7 @@ export function createPanel() {
           <button id="btn-mock-off" class="wide warn">关闭 Mock 视频</button>
           <button id="btn-mock-on" class="wide green">开启 Mock 视频</button>
         </div>
-        <div class="row"><button id="btn-task" class="wide">完成指定任务</button><select id="cfg-taskid" style="width:140px;padding:5px;background:#0f3460;border:1px solid #444;border-radius:5px;color:#eee;font-size:10px">
+        <div class="row"><button id="btn-task" class="wide">完成指定任务</button><select id="cfg-taskid" style="width:144px;margin-bottom:0;font-size:10px">
           <option value="">-- 选择任务 --</option>
           <option value="101">101 Register</option>
           <option value="102">102 Camera</option>

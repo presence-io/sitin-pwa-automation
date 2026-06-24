@@ -219,16 +219,16 @@ export function createTeachingUI(container: Element) {
 
     popup = document.createElement('div');
     popup.id = 'autobot-text-picker';
-    popup.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #00bcd4;border-radius:8px;padding:10px;z-index:999999;font-family:-apple-system,sans-serif;font-size:12px;color:#eee;box-shadow:0 4px 16px rgba(0,0,0,.4);min-width:220px;max-width:320px';
+    popup.style.cssText = 'position:fixed;top:40px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #d0d7de;border-radius:10px;padding:12px;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:#1f2328;box-shadow:0 8px 28px rgba(31,35,40,.18);min-width:220px;max-width:320px';
 
     popup.innerHTML = `
-      <div style="font-weight:600;margin-bottom:6px;color:#00bcd4;font-size:11px">选择匹配文本:</div>
-      <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="font-weight:600;margin-bottom:8px;color:#1f2328;font-size:11px">选择匹配文本:</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
         ${texts.map((t, i) => `
-          <button data-pick-idx="${i}" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHTML(t)}</button>
+          <button data-pick-idx="${i}" style="text-align:left;padding:6px 9px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;cursor:pointer;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHTML(t)}</button>
         `).join('')}
       </div>
-      <button id="text-picker-skip" style="margin-top:6px;padding:4px;background:none;border:1px solid #444;border-radius:4px;color:#888;cursor:pointer;font-size:10px;width:100%">跳过（用 CSS 定位）</button>
+      <button id="text-picker-skip" style="margin-top:8px;padding:5px;background:none;border:1px solid #d0d7de;border-radius:6px;color:#656d76;cursor:pointer;font-size:10px;width:100%">跳过（用 CSS 定位）</button>
     `;
 
     document.body.appendChild(popup);
@@ -268,7 +268,7 @@ export function createTeachingUI(container: Element) {
 
     popup = document.createElement('div');
     popup.id = 'autobot-assert-popup';
-    popup.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #00bcd4;border-radius:8px;padding:10px;z-index:999999;font-family:-apple-system,sans-serif;font-size:12px;color:#eee;box-shadow:0 4px 16px rgba(0,0,0,.4);min-width:240px';
+    popup.style.cssText = 'position:fixed;top:40px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #d0d7de;border-radius:10px;padding:12px;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:#1f2328;box-shadow:0 8px 28px rgba(31,35,40,.18);min-width:240px';
 
     const currentUrl = location.pathname + location.search;
     const bodyText = document.body.innerText.slice(0, 500);
@@ -276,27 +276,27 @@ export function createTeachingUI(container: Element) {
     const recentEvents = events.slice(-10);
 
     popup.innerHTML = `
-      <div style="font-weight:600;margin-bottom:8px;color:#00bcd4">插入断言</div>
+      <div style="font-weight:600;margin-bottom:8px;color:#1f2328">插入断言</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <button data-assert="url" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
-          🔗 URL 包含 <span style="color:#888">${escHTML(currentUrl)}</span>
+        <button data-assert="url" style="text-align:left;padding:6px 9px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;cursor:pointer;font-size:11px">
+          🔗 URL 包含 <span style="color:#8c959f">${escHTML(currentUrl)}</span>
         </button>
-        <button data-assert="text-prompt" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
+        <button data-assert="text-prompt" style="text-align:left;padding:6px 9px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;cursor:pointer;font-size:11px">
           📝 文案存在（手动输入）
         </button>
-        <button data-assert="text-not" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
+        <button data-assert="text-not" style="text-align:left;padding:6px 9px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;cursor:pointer;font-size:11px">
           🚫 文案不存在（手动输入）
         </button>
         ${recentEvents.length > 0 ? `
-          <div style="font-size:10px;color:#888;margin-top:4px;border-top:1px solid #333;padding-top:4px">最近埋点事件:</div>
+          <div style="font-size:10px;color:#656d76;margin-top:4px;border-top:1px solid #e6e9ee;padding-top:6px">最近埋点事件:</div>
           ${recentEvents.map(ev => `
-            <button data-assert="event" data-sdk="${escHTML(ev.sdk)}" data-event="${escHTML(ev.event)}" style="text-align:left;padding:6px 8px;background:#0f3460;border:1px solid #444;border-radius:4px;color:#eee;cursor:pointer;font-size:11px">
-              📊 ${escHTML(ev.sdk)}: <span style="color:#ffeb3b">${escHTML(ev.event)}</span>
+            <button data-assert="event" data-sdk="${escHTML(ev.sdk)}" data-event="${escHTML(ev.event)}" style="text-align:left;padding:6px 9px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;cursor:pointer;font-size:11px">
+              📊 ${escHTML(ev.sdk)}: <span style="color:#9a6700">${escHTML(ev.event)}</span>
             </button>
           `).join('')}
-        ` : '<div style="font-size:10px;color:#666;margin-top:4px">暂无埋点事件</div>'}
+        ` : '<div style="font-size:10px;color:#8c959f;margin-top:4px">暂无埋点事件</div>'}
       </div>
-      <button id="assert-popup-close" style="margin-top:8px;padding:4px 8px;background:none;border:1px solid #444;border-radius:4px;color:#888;cursor:pointer;font-size:10px;width:100%">取消</button>
+      <button id="assert-popup-close" style="margin-top:8px;padding:5px 8px;background:none;border:1px solid #d0d7de;border-radius:6px;color:#656d76;cursor:pointer;font-size:10px;width:100%">取消</button>
     `;
 
     document.body.appendChild(popup);

@@ -2,6 +2,22 @@ import {
   DB_URL, fbPut, fbGet, fbPatch, fbDelete, fbListen,
   type DeviceInfo, type RemoteCommand, type CommandProgress,
 } from '../shared/firebase';
+import { loadRrweb } from '../shared/rrweb-loader';
+
+// Minimal rrweb replay styles (the base Replayer renders into an iframe; these
+// only cover the wrapper + cursor so we don't need the full rrweb stylesheet).
+const RRWEB_CSS = `
+.replayer-wrapper{position:relative;overflow:hidden}
+.replayer-wrapper>iframe{border:none;background:#fff}
+.replayer-mouse{position:absolute;width:20px;height:20px;border-radius:50%;background:rgba(9,105,218,.35);transition:left .05s linear,top .05s linear;z-index:9}
+`;
+function ensureRrwebCss(): void {
+  if (document.getElementById('rrweb-css')) return;
+  const s = document.createElement('style');
+  s.id = 'rrweb-css';
+  s.textContent = RRWEB_CSS;
+  document.head.appendChild(s);
+}
 
 const TESTS_BASE_URL = 'https://presence-io.github.io/sitin-pwa-automation/tests';
 
@@ -832,43 +848,293 @@ function showPasteModal(): void {
 }
 
 function showScreenModal(deviceId: string): void {
+  ensureRrwebCss();
   // Tell agent to start sync
   fbPut(`syncControl/${deviceId}`, { screenSync: true, fps: 1 });
 
   const container = document.getElementById('modal-container')!;
   container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:440px">
       <div class="modal-hdr">
         <h3>📱 ${esc(deviceId)}</h3>
         <button class="close" id="modal-close">✕</button>
       </div>
-      <div class="modal-body" style="text-align:center;padding:8px">
-        <div id="screen-info" style="font-size:11px;color:#8b949e;margin-bottom:8px">Connecting...</div>
-        <img id="screen-img" style="max-width:100%;border:1px solid #30363d;border-radius:6px;background:#0d1117;min-height:200px" />
+      <div class="modal-body" style="padding:10px">
+        <div id="screen-info" style="font-size:11px;color:#8b949e;margin-bottom:8px;white-space:pre-wrap">Connecting...</div>
+        <div id="screen-stage" style="border:1px solid #30363d;border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
+        <img id="screen-img" style="display:none;max-width:100%;border:1px solid #30363d;border-radius:6px;background:#0d1117" />
+
+        <div id="pb-bar" style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11px;color:#8b949e">
+          <button id="pb-start" title="跳到开头" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 7px;cursor:pointer">⏮</button>
+          <button id="pb-prev" title="上一帧（单步后退）" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 7px;cursor:pointer">⏪</button>
+          <button id="pb-play" title="播放 / 暂停" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 9px;cursor:pointer">▶</button>
+          <button id="pb-next" title="下一帧（单步前进）" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 7px;cursor:pointer">⏩</button>
+          <input id="pb-seek" type="range" min="0" max="0" value="0" step="1" style="flex:1;cursor:pointer" />
+          <span id="pb-time" style="white-space:nowrap;font-variant-numeric:tabular-nums">0.0 / 0.0s</span>
+          <button id="pb-live" title="跟随最新画面" style="background:#1f6feb;border:1px solid #1f6feb;border-radius:5px;color:#fff;font-size:11px;padding:3px 8px;cursor:pointer">跟随</button>
+        </div>
+
+        <div style="margin-top:12px;border-top:1px solid #30363d;padding-top:10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:12px;font-weight:600;color:#e6edf3">🖥 Console</span>
+            <input id="log-search" placeholder="搜索日志…" style="flex:1;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:4px 8px;font-size:11px" />
+            <label style="font-size:11px;color:#8b949e;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="log-filter" style="cursor:pointer" />仅匹配</label>
+            <select id="log-level" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:4px;font-size:11px">
+              <option value="">全部</option>
+              <option value="error">error</option>
+              <option value="warn">warn</option>
+              <option value="info">info</option>
+              <option value="log">log</option>
+            </select>
+            <span id="log-count" style="font-size:11px;color:#8b949e;white-space:nowrap"></span>
+            <button id="log-clear" title="清空显示" style="background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
+          </div>
+          <div id="log-list" style="height:200px;overflow:auto;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+        </div>
       </div>
     </div>
   </div>`;
 
+  const stageEl = document.getElementById('screen-stage') as HTMLElement;
   const imgEl = document.getElementById('screen-img') as HTMLImageElement;
   const infoEl = document.getElementById('screen-info')!;
+  const logListEl = document.getElementById('log-list') as HTMLElement;
+  const logSearchEl = document.getElementById('log-search') as HTMLInputElement;
+  const logFilterEl = document.getElementById('log-filter') as HTMLInputElement;
+  const logLevelEl = document.getElementById('log-level') as HTMLSelectElement;
+  const logCountEl = document.getElementById('log-count') as HTMLElement;
+
+  let logEntries: Array<{ level: string; msg: string; ts: number }> = [];
+  let logSeq = -1;
+
+  const LEVEL_COLOR: Record<string, string> = {
+    error: '#ff7b72', warn: '#d29922', info: '#79c0ff', log: '#adbac7', debug: '#8b949e',
+  };
+
+  function escHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function highlight(text: string, q: string): string {
+    const safe = escHtml(text);
+    if (!q) return safe;
+    const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return safe.replace(re, '<mark style="background:#bb8009;color:#fff;border-radius:2px">$1</mark>');
+  }
+
+  function renderLogs(): void {
+    const q = logSearchEl.value.trim();
+    const onlyMatch = logFilterEl.checked;
+    const lvl = logLevelEl.value;
+    const ql = q.toLowerCase();
+    const atBottom = logListEl.scrollHeight - logListEl.scrollTop - logListEl.clientHeight < 24;
+
+    let shown = 0;
+    const rows: string[] = [];
+    for (const e of logEntries) {
+      if (lvl && e.level !== lvl) continue;
+      const matches = q ? e.msg.toLowerCase().includes(ql) : false;
+      if (onlyMatch && q && !matches) continue;
+      shown++;
+      const time = new Date(e.ts).toLocaleTimeString();
+      const color = LEVEL_COLOR[e.level] || '#adbac7';
+      rows.push(
+        `<div style="padding:1px 0;color:${color};white-space:pre-wrap;word-break:break-word">` +
+        `<span style="color:#6e7681">${time}</span> ` +
+        `<span style="color:#6e7681">[${e.level}]</span> ` +
+        highlight(e.msg, q) +
+        `</div>`,
+      );
+    }
+    logListEl.innerHTML = rows.join('') || '<div style="color:#6e7681">暂无日志</div>';
+    logCountEl.textContent = q || lvl ? `${shown}/${logEntries.length}` : `${logEntries.length}`;
+    if (atBottom) logListEl.scrollTop = logListEl.scrollHeight;
+  }
+
+  logSearchEl.addEventListener('input', renderLogs);
+  logFilterEl.addEventListener('change', renderLogs);
+  logLevelEl.addEventListener('change', renderLogs);
+  document.getElementById('log-clear')!.addEventListener('click', () => {
+    logEntries = []; logSeq = -1; renderLogs();
+  });
+
+  const logSource = fbListen(`logs/${deviceId}`, async () => {
+    const data = await fbGet<any>(`logs/${deviceId}`);
+    if (!data || !Array.isArray(data.entries)) return;
+    if (typeof data.seq === 'number' && data.seq === logSeq) return;
+    logSeq = typeof data.seq === 'number' ? data.seq : logSeq;
+    logEntries = data.entries;
+    renderLogs();
+  });
+
+  let replayer: import('rrweb').Replayer | null = null;
+  let curBufferId: number | null = null;
+  let curCount = 0;
+
+  // Playback state. `live` = auto-follow the latest frame; when the user touches
+  // any transport control we freeze on the current window so they can step through.
+  let live = true;
+  let playing = false;
+  let offset = 0;          // current position within the window (ms)
+  let curTotal = 0;        // window length (ms)
+  let curOffsets: number[] = []; // sorted event offsets, for single-frame stepping
+  let latestData: any = null;
+  let rafId: number | null = null;
+  let playWallStart = 0;   // performance.now() when play() began
+  let playFromOffset = 0;  // offset at the moment play() began
+
+  const seekEl = document.getElementById('pb-seek') as HTMLInputElement;
+  const timeEl = document.getElementById('pb-time') as HTMLElement;
+  const playBtn = document.getElementById('pb-play') as HTMLButtonElement;
+  const liveBtn = document.getElementById('pb-live') as HTMLButtonElement;
+
+  function fmtSec(ms: number): string { return (ms / 1000).toFixed(1); }
+
+  function syncTransport(): void {
+    seekEl.max = String(Math.max(0, Math.round(curTotal)));
+    seekEl.value = String(Math.max(0, Math.round(offset)));
+    timeEl.textContent = `${fmtSec(offset)} / ${fmtSec(curTotal)}s`;
+    playBtn.textContent = playing ? '⏸' : '▶';
+    liveBtn.style.background = live ? '#1f6feb' : '#21262d';
+    liveBtn.style.borderColor = live ? '#1f6feb' : '#30363d';
+    liveBtn.style.color = live ? '#fff' : '#e6edf3';
+  }
+
+  function fitScale(w: number, h: number): void {
+    const wrapper = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
+    if (!wrapper || !w) return;
+    const scale = Math.min(1, stageEl.clientWidth / w);
+    wrapper.style.transform = `scale(${scale})`;
+    wrapper.style.transformOrigin = 'top left';
+    stageEl.style.height = Math.round(h * scale) + 'px';
+  }
+
+  function stopRaf(): void {
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  function seekTo(ms: number): void {
+    if (!replayer) return;
+    offset = Math.max(0, Math.min(curTotal, ms));
+    replayer.pause(offset);
+    syncTransport();
+  }
+
+  function pausePlayback(): void {
+    playing = false;
+    stopRaf();
+    if (replayer) replayer.pause(offset);
+    syncTransport();
+  }
+
+  function tick(): void {
+    if (!playing) return;
+    offset = playFromOffset + (performance.now() - playWallStart);
+    if (offset >= curTotal) { offset = curTotal; pausePlayback(); return; }
+    syncTransport();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function startPlayback(): void {
+    if (!replayer) return;
+    live = false;
+    if (offset >= curTotal) offset = 0; // replay from start if at the end
+    playing = true;
+    playFromOffset = offset;
+    playWallStart = performance.now();
+    replayer.play(offset);
+    syncTransport();
+    stopRaf();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stepFrame(dir: 1 | -1): void {
+    if (!replayer) return;
+    live = false;
+    if (playing) pausePlayback();
+    let target: number;
+    if (dir > 0) {
+      target = curOffsets.find((o) => o > offset + 0.5) ?? curTotal;
+    } else {
+      const prev = [...curOffsets].reverse().find((o) => o < offset - 0.5);
+      target = prev ?? 0;
+    }
+    seekTo(target);
+  }
+
+  async function renderRrweb(data: any): Promise<void> {
+    if (!Array.isArray(data.events) || data.events.length === 0) return;
+    // Rebuild only when the window changed (new checkout) or events grew.
+    if (data.bufferId === curBufferId && data.events.length === curCount) return;
+    curBufferId = data.bufferId;
+    curCount = data.events.length;
+
+    const rrweb = await loadRrweb(); // lazy: only fetched when a screen is opened
+    if (stageEl.isConnected === false) return; // modal closed while loading
+
+    imgEl.style.display = 'none';
+    stageEl.style.display = 'block';
+    stageEl.innerHTML = '';
+    if (replayer) { try { replayer.destroy(); } catch {} }
+    playing = false;
+    stopRaf();
+    replayer = new rrweb.Replayer(data.events, {
+      root: stageEl,
+      liveMode: false,
+      mouseTail: false,
+      showWarning: false,
+      showDebug: false,
+    });
+    const meta = replayer.getMetaData();
+    curTotal = Math.max(0, meta.totalTime);
+    curOffsets = data.events
+      .map((e: any) => e.timestamp - meta.startTime)
+      .filter((o: number) => o >= 0 && o <= curTotal)
+      .sort((a: number, b: number) => a - b);
+    offset = curTotal; // newest window starts at its latest frame
+    replayer.pause(offset);
+    fitScale(data.width, data.height);
+    syncTransport();
+  }
+
+  function renderLegacyImage(data: any): void {
+    stageEl.style.display = 'none';
+    imgEl.style.display = 'block';
+    imgEl.src = `data:image/jpeg;base64,${data.image}`;
+  }
+
+  // Transport controls (single-step playback).
+  document.getElementById('pb-start')!.addEventListener('click', () => { live = false; if (playing) pausePlayback(); seekTo(0); });
+  document.getElementById('pb-prev')!.addEventListener('click', () => stepFrame(-1));
+  document.getElementById('pb-next')!.addEventListener('click', () => stepFrame(1));
+  playBtn.addEventListener('click', () => { if (playing) pausePlayback(); else startPlayback(); });
+  seekEl.addEventListener('input', () => { live = false; if (playing) pausePlayback(); seekTo(Number(seekEl.value)); });
+  liveBtn.addEventListener('click', () => {
+    live = true;
+    if (playing) pausePlayback();
+    if (latestData) renderRrweb(latestData).catch(() => {});
+    syncTransport();
+  });
 
   // SSE listen for screen updates
   const source = fbListen(`screens/${deviceId}`, async () => {
     const data = await fbGet<any>(`screens/${deviceId}`);
     if (!data) return;
-    if (data.image) {
-      imgEl.src = `data:image/jpeg;base64,${data.image}`;
-      imgEl.style.display = 'block';
-    } else {
-      imgEl.style.display = 'none';
+
+    if (data.kind === 'rrweb') {
+      latestData = data;
+      // While the user is stepping through a frozen window, don't yank the view.
+      if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
+    } else if (data.image) {
+      renderLegacyImage(data);
     }
+
     const parts = [`${data.width}×${data.height}`, data.url || ''];
     if (data.title) parts.push(data.title);
     parts.push(new Date(data.timestamp).toLocaleTimeString());
     infoEl.textContent = parts.join(' · ');
-    if (!data.image && data.visibleText) {
+    if (data.kind !== 'rrweb' && !data.image && data.visibleText) {
       infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
-      infoEl.style.whiteSpace = 'pre-wrap';
     }
   });
 
@@ -876,6 +1142,9 @@ function showScreenModal(deviceId: string): void {
 
   const cleanup = () => {
     source.close();
+    logSource.close();
+    stopRaf();
+    if (replayer) { try { replayer.destroy(); } catch {} replayer = null; }
     state.screenViewers.delete(deviceId);
     fbPut(`syncControl/${deviceId}`, { screenSync: false });
     container.innerHTML = '';

@@ -4,8 +4,10 @@ import { configManager } from './testing/config';
 import { tracker } from './testing/tracker';
 import { startRemote } from './testing/remote';
 import { listenSyncControl } from './testing/screensync';
+import { installLogCapture } from './testing/logsync';
 
 async function init() {
+  installLogCapture();
   log('AutoBot v4 loaded');
   await configManager.init();
   tracker.install(configManager.getTrackers());

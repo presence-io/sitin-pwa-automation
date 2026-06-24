@@ -1,102 +1,83 @@
 import { log, warn } from '../core/helpers';
+import { loadRrweb } from '../shared/rrweb-loader';
 import { fbPut, fbDelete, fbListen } from '../shared/firebase';
 import { getDeviceId } from './remote';
+import { startLogStream, stopLogStream } from './logsync';
 
-let syncTimer: ReturnType<typeof setInterval> | null = null;
+let stopRecordFn: (() => void) | null = null;
+let flushTimer: ReturnType<typeof setInterval> | null = null;
 let syncSource: EventSource | null = null;
+let starting = false;
 
-async function captureAndUpload(): Promise<void> {
-  const deviceId = getDeviceId();
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const url = location.pathname + location.search;
-  const title = document.title;
+// Rolling buffer holds events since the last full snapshot (checkout), so a
+// viewer joining at any time can rebuild the page from a self-contained window.
+let buffer: any[] = [];
+let bufferId = 0;
+let dirty = false;
 
-  // Collect visible text summary for dashboard display
-  const visibleText = document.body.innerText.slice(0, 300).replace(/\s+/g, ' ').trim();
+const SELF_UI = '#autobot-fab, #autobot-panel, #autobot-minibar, #autobot-text-picker, #autobot-assert-popup';
 
-  const payload: any = {
-    width: w,
-    height: h,
-    url,
-    title,
-    visibleText,
-    timestamp: Date.now(),
-  };
-
-  // Try Canvas screenshot — works on same-origin pages without cross-origin images
-  const image = await captureCanvas();
-  if (image) {
-    payload.image = image;
-  }
-
-  await fbPut(`screens/${deviceId}`, payload);
-}
-
-async function captureCanvas(): Promise<string | null> {
+async function startSync(fps = 1): Promise<void> {
+  if (stopRecordFn || starting) return;
+  starting = true;
   try {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
+    const rrweb = await loadRrweb(); // lazy: only fetched when sync is turned on
+    if (stopRecordFn) return; // sync was stopped while the CDN script loaded
 
-    // Draw page background
-    const bgColor = window.getComputedStyle(document.body).backgroundColor || '#fff';
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, w, h);
+    buffer = [];
+    bufferId = Date.now();
+    dirty = false;
 
-    // Try foreignObject approach
-    const clone = document.documentElement.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('#autobot-panel, #autobot-fab, #autobot-minibar, #__vconsole, .vc-mask, img, video, canvas').forEach(el => el.remove());
-
-    // Remove all external stylesheets that might cause taint
-    clone.querySelectorAll('link[rel="stylesheet"]').forEach(el => el.remove());
-
-    const html = new XMLSerializer().serializeToString(clone);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-      <foreignObject width="100%" height="100%">${html}</foreignObject>
-    </svg>`;
-
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const blobUrl = URL.createObjectURL(blob);
-
-    return new Promise<string | null>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          ctx.drawImage(img, 0, 0);
-          URL.revokeObjectURL(blobUrl);
-          resolve(canvas.toDataURL('image/jpeg', 0.3).split(',')[1]);
-        } catch {
-          URL.revokeObjectURL(blobUrl);
-          resolve(null);
-        }
-      };
-      img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
-      img.src = blobUrl;
+    const stop = rrweb.record({
+      emit(event: any, isCheckout?: boolean) {
+        // On checkout rrweb emits a fresh Meta+FullSnapshot — start a new window.
+        if (isCheckout) { buffer = []; bufferId = Date.now(); }
+        buffer.push(event);
+        dirty = true;
+      },
+      checkoutEveryNms: 10000,
+      blockSelector: SELF_UI,
+      recordCanvas: false,
+      collectFonts: false,
+      inlineStylesheet: true, // inline CSS rules → no cross-origin canvas taint
+      sampling: { mousemove: 200, scroll: 200, input: 'last' },
     });
-  } catch {
-    return null;
+    stopRecordFn = stop ?? null;
+
+    const interval = Math.max(500, Math.round(1000 / fps));
+    flushTimer = setInterval(flush, interval);
+    log('Screen sync started (rrweb, lazy-loaded)');
+  } catch (e) {
+    warn('Screen sync: rrweb load failed', e);
+  } finally {
+    starting = false;
   }
 }
 
-function startSync(fps = 1): void {
-  if (syncTimer) return;
-  log('Screen sync started');
-  captureAndUpload();
-  syncTimer = setInterval(captureAndUpload, 1000 / fps);
+async function flush(): Promise<void> {
+  if (!dirty || buffer.length === 0) return;
+  dirty = false;
+  const deviceId = getDeviceId();
+  await fbPut(`screens/${deviceId}`, {
+    kind: 'rrweb',
+    bufferId,
+    events: buffer,
+    url: location.pathname + location.search,
+    title: document.title,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    timestamp: Date.now(),
+  });
 }
 
 function stopSync(): void {
-  if (syncTimer) {
-    clearInterval(syncTimer);
-    syncTimer = null;
-    const deviceId = getDeviceId();
-    fbDelete(`screens/${deviceId}`);
-    log('Screen sync stopped');
-  }
+  if (stopRecordFn) { stopRecordFn(); stopRecordFn = null; }
+  if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
+  buffer = [];
+  dirty = false;
+  const deviceId = getDeviceId();
+  fbDelete(`screens/${deviceId}`);
+  log('Screen sync stopped');
 }
 
 export function listenSyncControl(): void {
@@ -107,6 +88,12 @@ export function listenSyncControl(): void {
     try {
       const resp = await fetch(`https://autobot-remote-default-rtdb.firebaseio.com/syncControl/${deviceId}.json`);
       const data = await resp.json();
+      // Logs stream whenever a viewer is attached (screen sync or logs alone).
+      if (data?.screenSync || data?.logSync) {
+        startLogStream(data.fps || 1);
+      } else {
+        stopLogStream();
+      }
       if (data?.screenSync) {
         startSync(data.fps || 1);
       } else {
@@ -118,5 +105,6 @@ export function listenSyncControl(): void {
 
 export function cleanupSync(): void {
   stopSync();
+  stopLogStream();
   if (syncSource) { syncSource.close(); syncSource = null; }
 }
