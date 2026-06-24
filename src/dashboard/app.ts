@@ -217,7 +217,7 @@ function renderSuites(): void {
     const cases = s.cases?.length ?? 0;
     const checked = i === state.selectedSuite ? 'checked' : '';
     const isFirebase = s._source === 'firebase';
-    const deleteBtn = isFirebase ? `<button class="preview-btn btn-del-suite" data-idx="${i}" title="Delete" style="color:#f85149">✕</button>` : '';
+    const deleteBtn = isFirebase ? `<button class="preview-btn btn-del-suite" data-idx="${i}" title="Delete" style="color:#cf222e">✕</button>` : '';
     return `<div class="suite-item">
       <input type="radio" name="suite" value="${i}" ${checked}>
       <span class="name">${esc(s._remoteName || s.name)}</span>
@@ -229,14 +229,14 @@ function renderSuites(): void {
 
   // Recordings from Firebase (not yet converted to test suites)
   if (state.firebaseRecordings.length > 0) {
-    html += `<div style="font-size:11px;color:#8b949e;margin:10px 0 6px;border-top:1px solid #30363d;padding-top:8px">📹 Recordings from devices</div>`;
+    html += `<div style="font-size:11px;color:#59636e;margin:10px 0 6px;border-top:1px solid #d0d7de;padding-top:8px">📹 Recordings from devices</div>`;
     html += state.firebaseRecordings.map((r, i) => {
       const steps = r.steps?.length ?? 0;
-      return `<div class="suite-item" style="border-color:#30363d">
-        <span class="name" style="color:#8b949e">📹 ${esc(r.name)} <span style="font-size:10px;color:#484f58">${r.deviceId || ''}</span></span>
+      return `<div class="suite-item" style="border-color:#d0d7de">
+        <span class="name" style="color:#59636e">📹 ${esc(r.name)} <span style="font-size:10px;color:#8c959f">${r.deviceId || ''}</span></span>
         <span class="count">${steps} steps</span>
         <button class="preview-btn btn-preview-rec" data-rec-idx="${i}">Preview</button>
-        <button class="preview-btn btn-del-rec" data-rec-idx="${i}" title="Delete" style="color:#f85149">✕</button>
+        <button class="preview-btn btn-del-rec" data-rec-idx="${i}" title="Delete" style="color:#cf222e">✕</button>
       </div>`;
     }).join('');
   }
@@ -410,7 +410,7 @@ function renderHistory(): void {
       <span class="detail">${esc(cmd.suite)} · ${esc(cmd.status)}</span>
       <span class="time">${time}</span>
       ${isDone ? `<button class="preview-btn btn-history-report" data-cmd-id="${esc(cmd.id)}">Report</button>` : ''}
-      <button class="preview-btn btn-del-history" data-cmd-id="${esc(cmd.id)}" title="Delete" style="color:#f85149">✕</button>
+      <button class="preview-btn btn-del-history" data-cmd-id="${esc(cmd.id)}" title="Delete" style="color:#cf222e">✕</button>
     </div>`;
   }).join('');
 
@@ -446,9 +446,9 @@ function showHistoryReportModal(cmd: RemoteCommand | undefined, deviceResults: R
   const time = cmd ? new Date(cmd.createdAt).toLocaleString() : '';
   const entries = Object.entries(deviceResults);
 
-  let html = `<div style="margin-bottom:12px;font-size:12px;color:#8b949e">
-    Suite: <strong style="color:#e6edf3">${esc(suiteName)}</strong> ·
-    Devices: <strong style="color:#e6edf3">${esc(targets)}</strong> ·
+  let html = `<div style="margin-bottom:12px;font-size:12px;color:#59636e">
+    Suite: <strong style="color:#1f2328">${esc(suiteName)}</strong> ·
+    Devices: <strong style="color:#1f2328">${esc(targets)}</strong> ·
     ${time}
   </div>`;
 
@@ -463,19 +463,19 @@ function showHistoryReportModal(cmd: RemoteCommand | undefined, deviceResults: R
   }
   if (totalAll > 0) {
     const passRate = Math.round((totalPassed / totalAll) * 100);
-    const barColor = totalFailed > 0 ? '#f85149' : '#3fb950';
+    const barColor = totalFailed > 0 ? '#cf222e' : '#1a7f37';
     html += `<div style="display:flex;gap:12px;margin-bottom:12px">
-      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center">
+      <div style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:10px 16px;text-align:center">
         <div style="font-size:20px;font-weight:700;color:${barColor}">${passRate}%</div>
-        <div style="font-size:10px;color:#8b949e">Overall</div>
+        <div style="font-size:10px;color:#59636e">Overall</div>
       </div>
-      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#e6edf3">${totalPassed}<span style="font-size:12px;color:#8b949e">/${totalAll}</span></div>
-        <div style="font-size:10px;color:#8b949e">Passed</div>
+      <div style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:10px 16px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1f2328">${totalPassed}<span style="font-size:12px;color:#59636e">/${totalAll}</span></div>
+        <div style="font-size:10px;color:#59636e">Passed</div>
       </div>
-      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#e6edf3">${entries.length}</div>
-        <div style="font-size:10px;color:#8b949e">Devices</div>
+      <div style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:10px 16px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1f2328">${entries.length}</div>
+        <div style="font-size:10px;color:#59636e">Devices</div>
       </div>
     </div>`;
   }
@@ -487,32 +487,32 @@ function showHistoryReportModal(cmd: RemoteCommand | undefined, deviceResults: R
     const statusIcon = r.status === 'completed' ? '✅' : r.status === 'failed' ? '❌' : '⏳';
     const summaryText = ds ? `${ds.passed}/${ds.total} passed` : r.status;
 
-    html += `<div style="border:1px solid #30363d;border-radius:8px;margin-bottom:8px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#161b22;cursor:pointer" class="device-toggle">
+    html += `<div style="border:1px solid #d0d7de;border-radius:8px;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#ffffff;cursor:pointer" class="device-toggle">
         <span>${statusIcon}</span>
-        <span style="flex:1;font-size:13px;font-weight:600;color:#e6edf3">📱 ${esc(deviceId)}</span>
-        <span style="font-size:11px;color:#8b949e">${esc(summaryText)} · ${dur}</span>
-        <span style="font-size:10px;color:#484f58">▼</span>
+        <span style="flex:1;font-size:13px;font-weight:600;color:#1f2328">📱 ${esc(deviceId)}</span>
+        <span style="font-size:11px;color:#59636e">${esc(summaryText)} · ${dur}</span>
+        <span style="font-size:10px;color:#8c959f">▼</span>
       </div>
-      <div class="device-detail" style="display:none;padding:8px 12px;background:#0d1117">`;
+      <div class="device-detail" style="display:none;padding:8px 12px;background:#f6f8fa">`;
 
     if (r.report) {
       // Full report available — render case details
       const results: any[] = r.report.results || [];
       for (const c of results) {
         const cIcon = c.status === 'passed' ? '✓' : c.status === 'failed' ? '✗' : '○';
-        const cColor = c.status === 'passed' ? '#3fb950' : c.status === 'failed' ? '#f85149' : '#8b949e';
+        const cColor = c.status === 'passed' ? '#1a7f37' : c.status === 'failed' ? '#cf222e' : '#59636e';
         const cDur = c.duration ? (c.duration / 1000).toFixed(1) + 's' : '';
 
         html += `<div style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px">
             <span style="color:${cColor};font-weight:700">${cIcon}</span>
-            <span style="color:#e6edf3">${esc(c.name)}</span>
-            <span style="color:#8b949e;font-size:10px">${cDur}</span>
+            <span style="color:#1f2328">${esc(c.name)}</span>
+            <span style="color:#59636e;font-size:10px">${cDur}</span>
           </div>`;
 
         if (c.error) {
-          html += `<div style="padding:4px 8px;background:#3d1214;border:1px solid #f85149;border-radius:4px;margin-bottom:4px;font-size:11px;color:#f85149">${esc(c.error)}</div>`;
+          html += `<div style="padding:4px 8px;background:#ffebe9;border:1px solid #cf222e;border-radius:4px;margin-bottom:4px;font-size:11px;color:#cf222e">${esc(c.error)}</div>`;
         }
 
         // Steps
@@ -522,12 +522,12 @@ function showHistoryReportModal(cmd: RemoteCommand | undefined, deviceResults: R
           for (let i = 0; i < steps.length; i++) {
             const st = steps[i];
             const sIcon = st.status === 'ok' ? '✓' : st.status === 'fail' ? '✗' : '○';
-            const sColor = st.status === 'ok' ? '#3fb950' : st.status === 'fail' ? '#f85149' : '#8b949e';
-            html += `<tr style="border-bottom:1px solid #21262d">
-              <td style="padding:2px 4px;color:#484f58;width:20px">${i + 1}</td>
-              <td style="padding:2px 4px;color:#e6edf3">${esc(st.action)}${st.detail ? ` <span style="color:#8b949e">${esc(st.detail)}</span>` : ''}</td>
+            const sColor = st.status === 'ok' ? '#1a7f37' : st.status === 'fail' ? '#cf222e' : '#59636e';
+            html += `<tr style="border-bottom:1px solid #f6f8fa">
+              <td style="padding:2px 4px;color:#8c959f;width:20px">${i + 1}</td>
+              <td style="padding:2px 4px;color:#1f2328">${esc(st.action)}${st.detail ? ` <span style="color:#59636e">${esc(st.detail)}</span>` : ''}</td>
               <td style="padding:2px 4px;color:${sColor};width:20px">${sIcon}</td>
-              <td style="padding:2px 4px;color:#8b949e;width:50px">${st.duration ? st.duration + 'ms' : ''}</td>
+              <td style="padding:2px 4px;color:#59636e;width:50px">${st.duration ? st.duration + 'ms' : ''}</td>
             </tr>`;
           }
           html += `</table>`;
@@ -541,19 +541,19 @@ function showHistoryReportModal(cmd: RemoteCommand | undefined, deviceResults: R
             const p = ev.params && Object.keys(ev.params).length > 0
               ? ' (' + Object.entries(ev.params).map(([k, v]) => `${k}=${v}`).join(', ') + ')'
               : '';
-            html += `<span style="padding:1px 6px;background:#0d2137;border:1px solid #1f6feb;border-radius:8px;font-size:9px;color:#58a6ff" title="${esc(ev.sdk + ':' + ev.event + p)}">${esc(ev.sdk)}:${esc(ev.event)}${p ? ' ...' : ''}</span>`;
+            html += `<span style="padding:1px 6px;background:#ddf4ff;border:1px solid #0969da;border-radius:8px;font-size:9px;color:#0969da" title="${esc(ev.sdk + ':' + ev.event + p)}">${esc(ev.sdk)}:${esc(ev.event)}${p ? ' ...' : ''}</span>`;
           }
           html += `</div>`;
         }
 
         if (c.screenshot) {
-          html += `<img src="${c.screenshot}" style="max-width:100%;border:1px solid #30363d;border-radius:4px;margin-top:4px" />`;
+          html += `<img src="${c.screenshot}" style="max-width:100%;border:1px solid #d0d7de;border-radius:4px;margin-top:4px" />`;
         }
 
         html += `</div>`;
       }
     } else {
-      html += `<div style="font-size:11px;color:#8b949e">Summary only — ${esc(summaryText)}</div>`;
+      html += `<div style="font-size:11px;color:#59636e">Summary only — ${esc(summaryText)}</div>`;
     }
 
     html += `</div></div>`;
@@ -602,12 +602,12 @@ function showPreviewModal(suite: any, suiteIndex?: number): void {
         <button class="close" id="modal-close">✕</button>
       </div>
       <div class="modal-body">
-        <textarea id="suite-editor" style="width:100%;min-height:350px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical">${esc(json)}</textarea>
-        <div id="editor-error" style="font-size:11px;color:#f85149;margin-top:4px;display:none"></div>
+        <textarea id="suite-editor" style="width:100%;min-height:350px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical">${esc(json)}</textarea>
+        <div id="editor-error" style="font-size:11px;color:#cf222e;margin-top:4px;display:none"></div>
       </div>
-      <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #30363d">
-        <button id="editor-copy" style="padding:6px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:12px;cursor:pointer">📋 Copy</button>
-        <button id="editor-save" style="padding:6px 16px;background:#238636;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #d0d7de">
+        <button id="editor-copy" style="padding:6px 16px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:12px;cursor:pointer">📋 Copy</button>
+        <button id="editor-save" style="padding:6px 16px;background:#1f883d;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>
       </div>
     </div>
   </div>`;
@@ -660,25 +660,25 @@ function showReportModal(deviceId: string, report: any): void {
   const s = report.summary || {};
   const duration = report.duration ? (report.duration / 1000).toFixed(1) : '?';
   const passRate = s.total ? Math.round((s.passed / s.total) * 100) : 0;
-  const barColor = s.failed > 0 ? '#f85149' : '#3fb950';
+  const barColor = s.failed > 0 ? '#cf222e' : '#1a7f37';
 
   let html = `
     <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
-      <div style="flex:1;min-width:120px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
+      <div style="flex:1;min-width:120px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:24px;font-weight:700;color:${barColor}">${passRate}%</div>
-        <div style="font-size:11px;color:#8b949e">Pass Rate</div>
+        <div style="font-size:11px;color:#59636e">Pass Rate</div>
       </div>
-      <div style="flex:1;min-width:120px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#e6edf3">${s.passed || 0}<span style="font-size:14px;color:#8b949e">/${s.total || 0}</span></div>
-        <div style="font-size:11px;color:#8b949e">Passed</div>
+      <div style="flex:1;min-width:120px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#1f2328">${s.passed || 0}<span style="font-size:14px;color:#59636e">/${s.total || 0}</span></div>
+        <div style="font-size:11px;color:#59636e">Passed</div>
       </div>
-      <div style="flex:1;min-width:120px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#e6edf3">${duration}<span style="font-size:14px;color:#8b949e">s</span></div>
-        <div style="font-size:11px;color:#8b949e">Duration</div>
+      <div style="flex:1;min-width:120px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#1f2328">${duration}<span style="font-size:14px;color:#59636e">s</span></div>
+        <div style="font-size:11px;color:#59636e">Duration</div>
       </div>
     </div>
 
-    <div style="background:#21262d;border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden">
+    <div style="background:#f6f8fa;border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden">
       <div style="height:100%;width:${passRate}%;background:${barColor};border-radius:6px"></div>
     </div>
   `;
@@ -687,44 +687,44 @@ function showReportModal(deviceId: string, report: any): void {
   const results: any[] = report.results || [];
   for (const r of results) {
     const icon = r.status === 'passed' ? '✅' : r.status === 'failed' ? '❌' : '⏭️';
-    const caseColor = r.status === 'passed' ? '#3fb950' : r.status === 'failed' ? '#f85149' : '#8b949e';
+    const caseColor = r.status === 'passed' ? '#1a7f37' : r.status === 'failed' ? '#cf222e' : '#59636e';
     const caseDur = r.duration ? (r.duration / 1000).toFixed(1) + 's' : '';
 
-    html += `<div style="border:1px solid #30363d;border-radius:8px;margin-bottom:8px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#161b22;cursor:pointer" class="case-toggle">
+    html += `<div style="border:1px solid #d0d7de;border-radius:8px;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#ffffff;cursor:pointer" class="case-toggle">
         <span>${icon}</span>
         <span style="flex:1;font-size:13px;font-weight:600;color:${caseColor}">${esc(r.name)}</span>
-        <span style="font-size:11px;color:#8b949e">${caseDur}</span>
-        <span style="font-size:10px;color:#484f58">▼</span>
+        <span style="font-size:11px;color:#59636e">${caseDur}</span>
+        <span style="font-size:10px;color:#8c959f">▼</span>
       </div>
-      <div class="case-detail" style="display:none;padding:8px 12px;background:#0d1117">`;
+      <div class="case-detail" style="display:none;padding:8px 12px;background:#f6f8fa">`;
 
     // Error message
     if (r.error) {
-      html += `<div style="padding:6px 8px;background:#3d1214;border:1px solid #f85149;border-radius:4px;margin-bottom:8px;font-size:12px;color:#f85149">${esc(r.error)}</div>`;
+      html += `<div style="padding:6px 8px;background:#ffebe9;border:1px solid #cf222e;border-radius:4px;margin-bottom:8px;font-size:12px;color:#cf222e">${esc(r.error)}</div>`;
     }
 
     // Steps table
     const steps: any[] = r.steps || [];
     if (steps.length > 0) {
       html += `<table style="width:100%;font-size:11px;border-collapse:collapse">
-        <thead><tr style="color:#8b949e;text-align:left">
-          <th style="padding:4px 6px;border-bottom:1px solid #30363d;width:30px">#</th>
-          <th style="padding:4px 6px;border-bottom:1px solid #30363d">Action</th>
-          <th style="padding:4px 6px;border-bottom:1px solid #30363d;width:50px">Status</th>
-          <th style="padding:4px 6px;border-bottom:1px solid #30363d;width:60px">Time</th>
+        <thead><tr style="color:#59636e;text-align:left">
+          <th style="padding:4px 6px;border-bottom:1px solid #d0d7de;width:30px">#</th>
+          <th style="padding:4px 6px;border-bottom:1px solid #d0d7de">Action</th>
+          <th style="padding:4px 6px;border-bottom:1px solid #d0d7de;width:50px">Status</th>
+          <th style="padding:4px 6px;border-bottom:1px solid #d0d7de;width:60px">Time</th>
         </tr></thead><tbody>`;
 
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         const sIcon = step.status === 'ok' ? '✓' : step.status === 'fail' ? '✗' : '○';
-        const sColor = step.status === 'ok' ? '#3fb950' : step.status === 'fail' ? '#f85149' : '#8b949e';
+        const sColor = step.status === 'ok' ? '#1a7f37' : step.status === 'fail' ? '#cf222e' : '#59636e';
         const stepDur = step.duration ? step.duration + 'ms' : '';
-        html += `<tr style="border-bottom:1px solid #21262d">
-          <td style="padding:3px 6px;color:#484f58">${i + 1}</td>
-          <td style="padding:3px 6px;color:#e6edf3">${esc(step.action)}${step.detail ? `<div style="font-size:10px;color:#8b949e;margin-top:1px">${esc(step.detail)}</div>` : ''}</td>
+        html += `<tr style="border-bottom:1px solid #f6f8fa">
+          <td style="padding:3px 6px;color:#8c959f">${i + 1}</td>
+          <td style="padding:3px 6px;color:#1f2328">${esc(step.action)}${step.detail ? `<div style="font-size:10px;color:#59636e;margin-top:1px">${esc(step.detail)}</div>` : ''}</td>
           <td style="padding:3px 6px;color:${sColor};font-weight:600">${sIcon}</td>
-          <td style="padding:3px 6px;color:#8b949e">${stepDur}</td>
+          <td style="padding:3px 6px;color:#59636e">${stepDur}</td>
         </tr>`;
       }
       html += `</tbody></table>`;
@@ -732,28 +732,28 @@ function showReportModal(deviceId: string, report: any): void {
 
     // Screenshot
     if (r.screenshot) {
-      html += `<div style="margin-top:8px"><div style="font-size:10px;color:#8b949e;margin-bottom:4px">Failure Screenshot:</div>
-        <img src="${r.screenshot}" style="max-width:100%;border:1px solid #30363d;border-radius:4px" /></div>`;
+      html += `<div style="margin-top:8px"><div style="font-size:10px;color:#59636e;margin-bottom:4px">Failure Screenshot:</div>
+        <img src="${r.screenshot}" style="max-width:100%;border:1px solid #d0d7de;border-radius:4px" /></div>`;
     }
 
     // Tracked events per case
     const events: any[] = r.trackedEvents || [];
     if (events.length > 0) {
-      html += `<div style="margin-top:8px"><div style="font-size:10px;color:#8b949e;margin-bottom:4px">Tracked Events (${events.length}):</div>
+      html += `<div style="margin-top:8px"><div style="font-size:10px;color:#59636e;margin-bottom:4px">Tracked Events (${events.length}):</div>
         <table style="width:100%;font-size:10px;border-collapse:collapse">
-        <thead><tr style="color:#8b949e;text-align:left">
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">SDK</th>
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Event</th>
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Params</th>
+        <thead><tr style="color:#59636e;text-align:left">
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">SDK</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">Event</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">Params</th>
         </tr></thead><tbody>`;
       for (const ev of events) {
         const params = ev.params && Object.keys(ev.params).length > 0
           ? Object.entries(ev.params).map(([k, v]) => `${esc(k)}=${esc(String(v))}`).join(', ')
           : '-';
-        html += `<tr style="border-bottom:1px solid #21262d">
-          <td style="padding:3px 6px;color:#58a6ff">${esc(ev.sdk)}</td>
-          <td style="padding:3px 6px;color:#e6edf3">${esc(ev.event)}</td>
-          <td style="padding:3px 6px;color:#8b949e;word-break:break-all">${params}</td>
+        html += `<tr style="border-bottom:1px solid #f6f8fa">
+          <td style="padding:3px 6px;color:#0969da">${esc(ev.sdk)}</td>
+          <td style="padding:3px 6px;color:#1f2328">${esc(ev.event)}</td>
+          <td style="padding:3px 6px;color:#59636e;word-break:break-all">${params}</td>
         </tr>`;
       }
       html += `</tbody></table></div>`;
@@ -765,27 +765,27 @@ function showReportModal(deviceId: string, report: any): void {
   // Global tracked events
   const allEvents: any[] = report.trackedEvents || [];
   if (allEvents.length > 0) {
-    html += `<div style="margin-top:12px;border-top:1px solid #30363d;padding-top:12px">
-      <div style="font-size:12px;font-weight:600;color:#8b949e;margin-bottom:6px">All Tracked Events (${allEvents.length})</div>
+    html += `<div style="margin-top:12px;border-top:1px solid #d0d7de;padding-top:12px">
+      <div style="font-size:12px;font-weight:600;color:#59636e;margin-bottom:6px">All Tracked Events (${allEvents.length})</div>
       <table style="width:100%;font-size:11px;border-collapse:collapse">
-        <thead><tr style="color:#8b949e;text-align:left">
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">SDK</th>
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Event</th>
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Params</th>
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Step</th>
-          <th style="padding:3px 6px;border-bottom:1px solid #30363d">Time</th>
+        <thead><tr style="color:#59636e;text-align:left">
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">SDK</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">Event</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">Params</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">Step</th>
+          <th style="padding:3px 6px;border-bottom:1px solid #d0d7de">Time</th>
         </tr></thead><tbody>`;
     for (const ev of allEvents) {
       const t = new Date(ev.timestamp).toLocaleTimeString();
       const params = ev.params && Object.keys(ev.params).length > 0
-        ? Object.entries(ev.params).map(([k, v]) => `<span style="color:#58a6ff">${esc(k)}</span>=${esc(String(v))}`).join(', ')
-        : '<span style="color:#484f58">-</span>';
-      html += `<tr style="border-bottom:1px solid #21262d">
-        <td style="padding:3px 6px;color:#58a6ff">${esc(ev.sdk)}</td>
-        <td style="padding:3px 6px;color:#e6edf3">${esc(ev.event)}</td>
-        <td style="padding:3px 6px;color:#8b949e;word-break:break-all;max-width:300px">${params}</td>
-        <td style="padding:3px 6px;color:#8b949e">${ev.stepIndex ?? '-'}</td>
-        <td style="padding:3px 6px;color:#484f58">${t}</td>
+        ? Object.entries(ev.params).map(([k, v]) => `<span style="color:#0969da">${esc(k)}</span>=${esc(String(v))}`).join(', ')
+        : '<span style="color:#8c959f">-</span>';
+      html += `<tr style="border-bottom:1px solid #f6f8fa">
+        <td style="padding:3px 6px;color:#0969da">${esc(ev.sdk)}</td>
+        <td style="padding:3px 6px;color:#1f2328">${esc(ev.event)}</td>
+        <td style="padding:3px 6px;color:#59636e;word-break:break-all;max-width:300px">${params}</td>
+        <td style="padding:3px 6px;color:#59636e">${ev.stepIndex ?? '-'}</td>
+        <td style="padding:3px 6px;color:#8c959f">${t}</td>
       </tr>`;
     }
     html += `</tbody></table></div>`;
@@ -793,7 +793,7 @@ function showReportModal(deviceId: string, report: any): void {
 
   // Export button
   html += `<div style="margin-top:12px;display:flex;gap:8px">
-    <button id="report-export-json" style="padding:6px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:12px;cursor:pointer">📋 Copy JSON</button>
+    <button id="report-export-json" style="padding:6px 16px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:12px;cursor:pointer">📋 Copy JSON</button>
   </div>`;
 
   showModal(`Report: ${deviceId} — ${report.suite || ''}`, html);
@@ -860,36 +860,36 @@ function showScreenModal(deviceId: string): void {
         <button class="close" id="modal-close">✕</button>
       </div>
       <div class="modal-body" style="padding:10px">
-        <div id="screen-info" style="font-size:11px;color:#8b949e;margin-bottom:8px;white-space:pre-wrap">Connecting...</div>
-        <div id="screen-stage" style="border:1px solid #30363d;border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
-        <img id="screen-img" style="display:none;max-width:100%;border:1px solid #30363d;border-radius:6px;background:#0d1117" />
+        <div id="screen-info" style="font-size:11px;color:#59636e;margin-bottom:8px;white-space:pre-wrap">Connecting...</div>
+        <div id="screen-stage" style="border:1px solid #d0d7de;border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
+        <img id="screen-img" style="display:none;max-width:100%;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa" />
 
-        <div id="pb-bar" style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11px;color:#8b949e">
-          <button id="pb-start" title="跳到开头" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 7px;cursor:pointer">⏮</button>
-          <button id="pb-prev" title="上一帧（单步后退）" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 7px;cursor:pointer">⏪</button>
-          <button id="pb-play" title="播放 / 暂停" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 9px;cursor:pointer">▶</button>
-          <button id="pb-next" title="下一帧（单步前进）" style="background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;padding:3px 7px;cursor:pointer">⏩</button>
+        <div id="pb-bar" style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11px;color:#59636e">
+          <button id="pb-start" title="跳到开头" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏮</button>
+          <button id="pb-prev" title="上一帧（单步后退）" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏪</button>
+          <button id="pb-play" title="播放 / 暂停" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 9px;cursor:pointer">▶</button>
+          <button id="pb-next" title="下一帧（单步前进）" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏩</button>
           <input id="pb-seek" type="range" min="0" max="0" value="0" step="1" style="flex:1;cursor:pointer" />
           <span id="pb-time" style="white-space:nowrap;font-variant-numeric:tabular-nums">0.0 / 0.0s</span>
-          <button id="pb-live" title="跟随最新画面" style="background:#1f6feb;border:1px solid #1f6feb;border-radius:5px;color:#fff;font-size:11px;padding:3px 8px;cursor:pointer">跟随</button>
+          <button id="pb-live" title="跟随最新画面" style="background:#0969da;border:1px solid #0969da;border-radius:5px;color:#fff;font-size:11px;padding:3px 8px;cursor:pointer">跟随</button>
         </div>
 
-        <div style="margin-top:12px;border-top:1px solid #30363d;padding-top:10px">
+        <div style="margin-top:12px;border-top:1px solid #d0d7de;padding-top:10px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span style="font-size:12px;font-weight:600;color:#e6edf3">🖥 Console</span>
-            <input id="log-search" placeholder="搜索日志…" style="flex:1;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:4px 8px;font-size:11px" />
-            <label style="font-size:11px;color:#8b949e;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="log-filter" style="cursor:pointer" />仅匹配</label>
-            <select id="log-level" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:4px;font-size:11px">
+            <span style="font-size:12px;font-weight:600;color:#1f2328">🖥 Console</span>
+            <input id="log-search" placeholder="搜索日志…" style="flex:1;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px 8px;font-size:11px" />
+            <label style="font-size:11px;color:#59636e;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="log-filter" style="cursor:pointer" />仅匹配</label>
+            <select id="log-level" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px;font-size:11px">
               <option value="">全部</option>
               <option value="error">error</option>
               <option value="warn">warn</option>
               <option value="info">info</option>
               <option value="log">log</option>
             </select>
-            <span id="log-count" style="font-size:11px;color:#8b949e;white-space:nowrap"></span>
-            <button id="log-clear" title="清空显示" style="background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
+            <span id="log-count" style="font-size:11px;color:#59636e;white-space:nowrap"></span>
+            <button id="log-clear" title="清空显示" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
           </div>
-          <div id="log-list" style="height:200px;overflow:auto;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+          <div id="log-list" style="height:200px;overflow:auto;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
         </div>
       </div>
     </div>
@@ -908,7 +908,7 @@ function showScreenModal(deviceId: string): void {
   let logSeq = -1;
 
   const LEVEL_COLOR: Record<string, string> = {
-    error: '#ff7b72', warn: '#d29922', info: '#79c0ff', log: '#adbac7', debug: '#8b949e',
+    error: '#cf222e', warn: '#9a6700', info: '#0969da', log: '#1f2328', debug: '#59636e',
   };
 
   function escHtml(s: string): string {
@@ -919,7 +919,7 @@ function showScreenModal(deviceId: string): void {
     const safe = escHtml(text);
     if (!q) return safe;
     const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    return safe.replace(re, '<mark style="background:#bb8009;color:#fff;border-radius:2px">$1</mark>');
+    return safe.replace(re, '<mark style="background:#fff8c5;color:#1f2328;border-radius:2px">$1</mark>');
   }
 
   function renderLogs(): void {
@@ -937,16 +937,16 @@ function showScreenModal(deviceId: string): void {
       if (onlyMatch && q && !matches) continue;
       shown++;
       const time = new Date(e.ts).toLocaleTimeString();
-      const color = LEVEL_COLOR[e.level] || '#adbac7';
+      const color = LEVEL_COLOR[e.level] || '#1f2328';
       rows.push(
         `<div style="padding:1px 0;color:${color};white-space:pre-wrap;word-break:break-word">` +
-        `<span style="color:#6e7681">${time}</span> ` +
-        `<span style="color:#6e7681">[${e.level}]</span> ` +
+        `<span style="color:#59636e">${time}</span> ` +
+        `<span style="color:#59636e">[${e.level}]</span> ` +
         highlight(e.msg, q) +
         `</div>`,
       );
     }
-    logListEl.innerHTML = rows.join('') || '<div style="color:#6e7681">暂无日志</div>';
+    logListEl.innerHTML = rows.join('') || '<div style="color:#59636e">暂无日志</div>';
     logCountEl.textContent = q || lvl ? `${shown}/${logEntries.length}` : `${logEntries.length}`;
     if (atBottom) logListEl.scrollTop = logListEl.scrollHeight;
   }
@@ -995,9 +995,9 @@ function showScreenModal(deviceId: string): void {
     seekEl.value = String(Math.max(0, Math.round(offset)));
     timeEl.textContent = `${fmtSec(offset)} / ${fmtSec(curTotal)}s`;
     playBtn.textContent = playing ? '⏸' : '▶';
-    liveBtn.style.background = live ? '#1f6feb' : '#21262d';
-    liveBtn.style.borderColor = live ? '#1f6feb' : '#30363d';
-    liveBtn.style.color = live ? '#fff' : '#e6edf3';
+    liveBtn.style.background = live ? '#0969da' : '#f6f8fa';
+    liveBtn.style.borderColor = live ? '#0969da' : '#d0d7de';
+    liveBtn.style.color = live ? '#fff' : '#1f2328';
   }
 
   function fitScale(w: number, h: number): void {
@@ -1170,29 +1170,29 @@ function showAIGenerate(): void {
     <div class="modal" style="max-width:700px">
       <div class="modal-hdr"><h3>✨ AI Generate Test Case</h3><button class="close" id="modal-close">✕</button></div>
       <div class="modal-body">
-        <p style="color:#8b949e;margin-bottom:12px;font-size:13px">Describe the test scenario, then generate a prompt with project context to send to Claude/ChatGPT.</p>
+        <p style="color:#59636e;margin-bottom:12px;font-size:13px">Describe the test scenario, then generate a prompt with project context to send to Claude/ChatGPT.</p>
 
-        <label style="font-size:12px;font-weight:600;color:#e6edf3;display:block;margin-bottom:4px">Project: ${esc(projectName)}</label>
+        <label style="font-size:12px;font-weight:600;color:#1f2328;display:block;margin-bottom:4px">Project: ${esc(projectName)}</label>
 
-        <label style="font-size:12px;color:#8b949e;display:block;margin:12px 0 4px">Test scenario description:</label>
-        <textarea id="ai-scenario" placeholder="e.g. Test the user registration flow: open /login, click Quick Login, complete onboarding with username and age, verify redirected to /home and rangers login_success event fires" style="width:100%;min-height:100px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-size:12px;resize:vertical;font-family:inherit"></textarea>
+        <label style="font-size:12px;color:#59636e;display:block;margin:12px 0 4px">Test scenario description:</label>
+        <textarea id="ai-scenario" placeholder="e.g. Test the user registration flow: open /login, click Quick Login, complete onboarding with username and age, verify redirected to /home and rangers login_success event fires" style="width:100%;min-height:100px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:10px;font-size:12px;resize:vertical;font-family:inherit"></textarea>
 
         <div style="display:flex;gap:8px;margin-top:12px">
-          <button id="ai-gen-prompt" style="padding:8px 16px;background:#238636;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Generate Prompt</button>
-          <span id="ai-status" style="font-size:12px;color:#8b949e;line-height:36px"></span>
+          <button id="ai-gen-prompt" style="padding:8px 16px;background:#1f883d;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Generate Prompt</button>
+          <span id="ai-status" style="font-size:12px;color:#59636e;line-height:36px"></span>
         </div>
 
         <div id="ai-prompt-area" style="display:none;margin-top:12px">
-          <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px">Generated prompt (copy to Claude/ChatGPT):</label>
-          <textarea id="ai-prompt-output" readonly style="width:100%;min-height:200px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical"></textarea>
-          <button id="ai-copy-prompt" style="margin-top:8px;padding:6px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:12px;cursor:pointer">📋 Copy to clipboard</button>
+          <label style="font-size:12px;color:#59636e;display:block;margin-bottom:4px">Generated prompt (copy to Claude/ChatGPT):</label>
+          <textarea id="ai-prompt-output" readonly style="width:100%;min-height:200px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical"></textarea>
+          <button id="ai-copy-prompt" style="margin-top:8px;padding:6px 16px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:12px;cursor:pointer">📋 Copy to clipboard</button>
         </div>
 
-        <div style="margin-top:16px;border-top:1px solid #30363d;padding-top:12px">
-          <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px">Paste AI-generated JSON here:</label>
-          <textarea id="ai-json-input" placeholder='{ "name": "...", "cases": [...] }' style="width:100%;min-height:100px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical"></textarea>
+        <div style="margin-top:16px;border-top:1px solid #d0d7de;padding-top:12px">
+          <label style="font-size:12px;color:#59636e;display:block;margin-bottom:4px">Paste AI-generated JSON here:</label>
+          <textarea id="ai-json-input" placeholder='{ "name": "...", "cases": [...] }' style="width:100%;min-height:100px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:11px;resize:vertical"></textarea>
           <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="ai-import-json" style="padding:8px 16px;background:#238636;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Import & Add to Library</button>
+            <button id="ai-import-json" style="padding:8px 16px;background:#1f883d;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Import & Add to Library</button>
           </div>
         </div>
       </div>
@@ -1310,34 +1310,34 @@ ${sampleJSON}
 
 function showGuide(): void {
   showModal('AutoBot 使用指南', `
-<div style="font-size:13px;line-height:1.7;color:#c9d1d9">
+<div style="font-size:13px;line-height:1.7;color:#1f2328">
 
-<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">快速开始</h3>
+<h3 style="color:#0969da;margin:0 0 12px;font-size:16px">快速开始</h3>
 
-<p><strong style="color:#e6edf3">1. 连接设备</strong></p>
-<p style="color:#8b949e">在目标网页的 DevTools Console 中粘贴以下代码：</p>
-<pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto;cursor:pointer" onclick="navigator.clipboard.writeText(this.innerText);this.style.borderColor='#3fb950';setTimeout(()=>this.style.borderColor='#30363d',1000)">fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})</pre>
-<p style="color:#8b949e;font-size:11px">点击代码块可复制。设备将在数秒内出现在上方设备列表中。</p>
+<p><strong style="color:#1f2328">1. 连接设备</strong></p>
+<p style="color:#59636e">在目标网页的 DevTools Console 中粘贴以下代码：</p>
+<pre style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto;cursor:pointer" onclick="navigator.clipboard.writeText(this.innerText);this.style.borderColor='#1a7f37';setTimeout(()=>this.style.borderColor='#d0d7de',1000)">fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})</pre>
+<p style="color:#59636e;font-size:11px">点击代码块可复制。设备将在数秒内出现在上方设备列表中。</p>
 
-<p><strong style="color:#e6edf3">2. 选择设备和用例</strong></p>
-<p style="color:#8b949e">勾选目标设备，然后从列表中选择测试用例。点击 <strong style="color:#3fb950">▶ Run on selected devices</strong> 开始执行。</p>
+<p><strong style="color:#1f2328">2. 选择设备和用例</strong></p>
+<p style="color:#59636e">勾选目标设备，然后从列表中选择测试用例。点击 <strong style="color:#1a7f37">▶ Run on selected devices</strong> 开始执行。</p>
 
-<p><strong style="color:#e6edf3">3. 查看结果</strong></p>
-<p style="color:#8b949e">结果实时显示在 Results 区域。点击 <strong>Report</strong> 查看详细报告：逐步结果、失败截图、埋点事件及参数。</p>
+<p><strong style="color:#1f2328">3. 查看结果</strong></p>
+<p style="color:#59636e">结果实时显示在 Results 区域。点击 <strong>Report</strong> 查看详细报告：逐步结果、失败截图、埋点事件及参数。</p>
 
-<hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
+<hr style="border:none;border-top:1px solid #d0d7de;margin:16px 0">
 
-<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">功能说明</h3>
+<h3 style="color:#0969da;margin:0 0 12px;font-size:16px">功能说明</h3>
 
-<p><strong style="color:#e6edf3">📱 设备管理</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+<p><strong style="color:#1f2328">📱 设备管理</strong></p>
+<ul style="color:#59636e;padding-left:20px;margin:4px 0">
   <li>在线设备显示绿色圆点，离线显示红色</li>
   <li>点击 <strong>👁</strong> 实时查看设备当前页面截图</li>
   <li>可勾选多台设备同时执行测试</li>
 </ul>
 
-<p><strong style="color:#e6edf3">📋 测试用例</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+<p><strong style="color:#1f2328">📋 测试用例</strong></p>
+<ul style="color:#59636e;padding-left:20px;margin:4px 0">
   <li><strong>远程用例</strong> — 从 GitHub Pages 加载（只读）</li>
   <li><strong>🔥 Firebase 用例</strong> — Agent 或 Dashboard 上传的，可编辑/删除</li>
   <li><strong>📹 录制</strong> — 在设备端录制的操作流程，通过 Firebase 同步</li>
@@ -1345,35 +1345,35 @@ function showGuide(): void {
   <li><strong>Import / Paste JSON</strong> — 从文件或剪贴板导入用例</li>
 </ul>
 
-<p><strong style="color:#e6edf3">✨ AI 生成</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+<p><strong style="color:#1f2328">✨ AI 生成</strong></p>
+<ul style="color:#59636e;padding-left:20px;margin:4px 0">
   <li>用自然语言描述测试场景</li>
   <li>点击 Generate Prompt — 自动注入项目配置和用例格式规范</li>
   <li>复制到 Claude/ChatGPT → 将生成的 JSON 粘贴回来 → 导入</li>
 </ul>
 
-<p><strong style="color:#e6edf3">🚀 阶段任务 (Stages)</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+<p><strong style="color:#1f2328">🚀 阶段任务 (Stages)</strong></p>
+<ul style="color:#59636e;padding-left:20px;margin:4px 0">
   <li>Stage 1-5 预设流程，覆盖注册→提现的完整生命周期</li>
   <li>点击单个 <strong>▶</strong> 执行某个阶段，或 <strong>Run S1→S5 All</strong> 全部执行</li>
   <li>每台设备的进度实时更新</li>
   <li>阶段流程是可编辑的 JSON — 在 Preview 中修改即可</li>
 </ul>
 
-<p><strong style="color:#e6edf3">📊 结果与历史</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+<p><strong style="color:#1f2328">📊 结果与历史</strong></p>
+<ul style="color:#59636e;padding-left:20px;margin:4px 0">
   <li><strong>Results</strong> — 实时执行结果，刷新页面后自动恢复</li>
   <li><strong>History</strong> — 所有历史命令，每条都有 Report 按钮</li>
   <li><strong>Report</strong> — 通过率、逐步结果、失败截图、埋点事件及完整参数</li>
   <li>可单条删除或清空全部</li>
 </ul>
 
-<hr style="border:none;border-top:1px solid #30363d;margin:16px 0">
+<hr style="border:none;border-top:1px solid #d0d7de;margin:16px 0">
 
-<h3 style="color:#58a6ff;margin:0 0 12px;font-size:16px">设备端 (Agent)</h3>
+<h3 style="color:#0969da;margin:0 0 12px;font-size:16px">设备端 (Agent)</h3>
 
-<p><strong style="color:#e6edf3">录制操作</strong></p>
-<ul style="color:#8b949e;padding-left:20px;margin:4px 0">
+<p><strong style="color:#1f2328">录制操作</strong></p>
+<ul style="color:#59636e;padding-left:20px;margin:4px 0">
   <li>打开 AutoBot 面板 → 教学模式 → 开始录制</li>
   <li>正常操作页面 — 点击、输入、滚动、导航全部自动捕获</li>
   <li>点击列表项时会弹出文本选择器，选择用于匹配的稳定文本</li>
@@ -1382,22 +1382,22 @@ function showGuide(): void {
   <li>录制和转换的用例自动同步到 Firebase，Dashboard 中可见</li>
 </ul>
 
-<p><strong style="color:#e6edf3">可用的 call 函数</strong></p>
+<p><strong style="color:#1f2328">可用的 call 函数</strong></p>
 <table style="font-size:11px;border-collapse:collapse;width:100%;margin:6px 0">
-  <tr style="border-bottom:1px solid #30363d;color:#8b949e"><th style="padding:4px;text-align:left">函数名</th><th style="padding:4px;text-align:left">参数</th><th style="padding:4px;text-align:left">说明</th></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">deleteAccount</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">注销当前账号（通过 /debug 页面）</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">quickLogin</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">快速登录</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">onboarding</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">自动完成注册流程</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">cashout</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">触发提现 + 自动关闭弹窗</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">completeTask</td><td style="padding:4px">[taskId, label]</td><td style="padding:4px;color:#8b949e">通过 Debug 页面完成指定任务</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCallsAuto</td><td style="padding:4px">[收益$, 时长min]</td><td style="padding:4px;color:#8b949e">自动计算所需 Mock Call 次数</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">mockCalls</td><td style="padding:4px">[count]</td><td style="padding:4px;color:#8b949e">执行指定次数的 Mock Call</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">clearLocalStorage</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">清除 localStorage（保留 autobot 配置）</td></tr>
-  <tr><td style="padding:4px;color:#58a6ff">clearAll</td><td style="padding:4px">—</td><td style="padding:4px;color:#8b949e">清除所有浏览器存储</td></tr>
+  <tr style="border-bottom:1px solid #d0d7de;color:#59636e"><th style="padding:4px;text-align:left">函数名</th><th style="padding:4px;text-align:left">参数</th><th style="padding:4px;text-align:left">说明</th></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">deleteAccount</td><td style="padding:4px">—</td><td style="padding:4px;color:#59636e">注销当前账号（通过 /debug 页面）</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">quickLogin</td><td style="padding:4px">—</td><td style="padding:4px;color:#59636e">快速登录</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">onboarding</td><td style="padding:4px">—</td><td style="padding:4px;color:#59636e">自动完成注册流程</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">cashout</td><td style="padding:4px">—</td><td style="padding:4px;color:#59636e">触发提现 + 自动关闭弹窗</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">completeTask</td><td style="padding:4px">[taskId, label]</td><td style="padding:4px;color:#59636e">通过 Debug 页面完成指定任务</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">mockCallsAuto</td><td style="padding:4px">[收益$, 时长min]</td><td style="padding:4px;color:#59636e">自动计算所需 Mock Call 次数</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">mockCalls</td><td style="padding:4px">[count]</td><td style="padding:4px;color:#59636e">执行指定次数的 Mock Call</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">clearLocalStorage</td><td style="padding:4px">—</td><td style="padding:4px;color:#59636e">清除 localStorage（保留 autobot 配置）</td></tr>
+  <tr><td style="padding:4px;color:#0969da">clearAll</td><td style="padding:4px">—</td><td style="padding:4px;color:#59636e">清除所有浏览器存储</td></tr>
 </table>
 
-<p><strong style="color:#e6edf3">测试用例格式示例</strong></p>
-<pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto">{
+<p><strong style="color:#1f2328">测试用例格式示例</strong></p>
+<pre style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:8px;font-size:11px;margin:6px 0;overflow-x:auto">{
   "name": "登录验证",
   "cases": [{
     "name": "快速登录并检查埋点",
@@ -1410,17 +1410,17 @@ function showGuide(): void {
   }]
 }</pre>
 
-<p><strong style="color:#e6edf3">支持的操作类型</strong></p>
+<p><strong style="color:#1f2328">支持的操作类型</strong></p>
 <table style="font-size:11px;border-collapse:collapse;width:100%;margin:6px 0">
-  <tr style="border-bottom:1px solid #30363d;color:#8b949e"><th style="padding:4px;text-align:left">操作</th><th style="padding:4px;text-align:left">说明</th><th style="padding:4px;text-align:left">录制方式</th></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">click</td><td style="padding:4px;color:#8b949e">点击元素</td><td style="padding:4px;color:#8b949e">自动捕获</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">input</td><td style="padding:4px;color:#8b949e">输入文字</td><td style="padding:4px;color:#8b949e">自动捕获（连续输入合并）</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">scroll</td><td style="padding:4px;color:#8b949e">页面滚动</td><td style="padding:4px;color:#8b949e">自动捕获（300ms 防抖）</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">navigate</td><td style="padding:4px;color:#8b949e">页面跳转</td><td style="padding:4px;color:#8b949e">自动捕获（SPA 路由）</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">select</td><td style="padding:4px;color:#8b949e">下拉选择</td><td style="padding:4px;color:#8b949e">自动捕获</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">assert</td><td style="padding:4px;color:#8b949e">插入断言</td><td style="padding:4px;color:#8b949e">手动（minibar [+断言]）</td></tr>
-  <tr style="border-bottom:1px solid #21262d"><td style="padding:4px;color:#58a6ff">wait</td><td style="padding:4px;color:#8b949e">等待 N 毫秒</td><td style="padding:4px;color:#8b949e">手写 JSON</td></tr>
-  <tr><td style="padding:4px;color:#58a6ff">call</td><td style="padding:4px;color:#8b949e">调用内置函数</td><td style="padding:4px;color:#8b949e">手写 JSON</td></tr>
+  <tr style="border-bottom:1px solid #d0d7de;color:#59636e"><th style="padding:4px;text-align:left">操作</th><th style="padding:4px;text-align:left">说明</th><th style="padding:4px;text-align:left">录制方式</th></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">click</td><td style="padding:4px;color:#59636e">点击元素</td><td style="padding:4px;color:#59636e">自动捕获</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">input</td><td style="padding:4px;color:#59636e">输入文字</td><td style="padding:4px;color:#59636e">自动捕获（连续输入合并）</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">scroll</td><td style="padding:4px;color:#59636e">页面滚动</td><td style="padding:4px;color:#59636e">自动捕获（300ms 防抖）</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">navigate</td><td style="padding:4px;color:#59636e">页面跳转</td><td style="padding:4px;color:#59636e">自动捕获（SPA 路由）</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">select</td><td style="padding:4px;color:#59636e">下拉选择</td><td style="padding:4px;color:#59636e">自动捕获</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">assert</td><td style="padding:4px;color:#59636e">插入断言</td><td style="padding:4px;color:#59636e">手动（minibar [+断言]）</td></tr>
+  <tr style="border-bottom:1px solid #f6f8fa"><td style="padding:4px;color:#0969da">wait</td><td style="padding:4px;color:#59636e">等待 N 毫秒</td><td style="padding:4px;color:#59636e">手写 JSON</td></tr>
+  <tr><td style="padding:4px;color:#0969da">call</td><td style="padding:4px;color:#59636e">调用内置函数</td><td style="padding:4px;color:#59636e">手写 JSON</td></tr>
 </table>
 
 </div>
@@ -1430,12 +1430,12 @@ function showGuide(): void {
 function showConnectHelp(): void {
   const script = `fetch('https://presence-io.github.io/sitin-pwa-automation/autobot.js').then(r=>r.text()).then(t=>{const s=document.createElement('script');s.textContent=t;document.body.appendChild(s)})`;
   showModal('Add Device', `
-    <p style="margin-bottom:12px;color:#8b949e">Inject AutoBot agent into any web page to connect a device:</p>
-    <p style="font-weight:600;margin-bottom:8px;color:#e6edf3">Option 1: Browser Console</p>
-    <p style="margin-bottom:4px;color:#8b949e;font-size:12px">Open DevTools Console on the target page and paste:</p>
+    <p style="margin-bottom:12px;color:#59636e">Inject AutoBot agent into any web page to connect a device:</p>
+    <p style="font-weight:600;margin-bottom:8px;color:#1f2328">Option 1: Browser Console</p>
+    <p style="margin-bottom:4px;color:#59636e;font-size:12px">Open DevTools Console on the target page and paste:</p>
     <pre style="cursor:pointer" id="copy-script">${esc(script)}</pre>
-    <p style="font-size:11px;color:#484f58;margin-top:4px">Click to copy</p>
-    <p style="font-weight:600;margin:16px 0 8px;color:#e6edf3">Option 2: Script tag (permanent)</p>
+    <p style="font-size:11px;color:#8c959f;margin-top:4px">Click to copy</p>
+    <p style="font-weight:600;margin:16px 0 8px;color:#1f2328">Option 2: Script tag (permanent)</p>
     <pre>&lt;script&gt;
 if (localStorage.getItem('autobot_enabled') === '1') {
   var s = document.createElement('script');
@@ -1447,7 +1447,7 @@ if (localStorage.getItem('autobot_enabled') === '1') {
   `);
   document.getElementById('copy-script')?.addEventListener('click', () => {
     navigator.clipboard.writeText(script);
-    document.getElementById('copy-script')!.style.borderColor = '#3fb950';
+    document.getElementById('copy-script')!.style.borderColor = '#1a7f37';
     setTimeout(() => { document.getElementById('copy-script')!.style.borderColor = ''; }, 1000);
   });
 }
@@ -1523,7 +1523,7 @@ function renderStages(): void {
 
   el.innerHTML = STAGE_DEFS.map((s, i) => `
     <div class="suite-item" style="justify-content:space-between">
-      <span class="name" style="font-weight:600">${esc(s.name)} <span style="color:#3fb950">${s.amount}</span> <span style="color:#8b949e;font-weight:400;font-size:11px">${esc(s.desc)}</span></span>
+      <span class="name" style="font-weight:600">${esc(s.name)} <span style="color:#1a7f37">${s.amount}</span> <span style="color:#59636e;font-weight:400;font-size:11px">${esc(s.desc)}</span></span>
       <button class="btn btn-run btn-stage-single" data-stage="${i}" style="font-size:11px;padding:4px 12px">▶</button>
     </div>
   `).join('');
