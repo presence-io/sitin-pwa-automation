@@ -149,6 +149,10 @@ async function answerOffer(offer: any): Promise<void> {
     const ch = ev.channel;
     ch.onopen = () => {
       rtcChannel = ch;
+      // Peer is up: heavy frames go P2P. Stop writing to the DB and clear any
+      // stale screens/ node so the viewer never falls back to old data.
+      rtdbActive = false;
+      fbDelete(`screens/${deviceId}`);
       startRecording(1).then(() => { dirty = true; flush(); });
       log('Screen sync: WebRTC peer connected');
     };

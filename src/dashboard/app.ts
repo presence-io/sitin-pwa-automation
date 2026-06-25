@@ -880,8 +880,9 @@ function showPasteModal(): void {
 
 function showScreenModal(deviceId: string): void {
   ensureRrwebCss();
-  // Tell agent to start sync
-  fbPut(`syncControl/${deviceId}`, { screenSync: true, fps: 1 });
+  // Start with logs only — screen frames go peer-to-peer over WebRTC, so we
+  // don't ask the agent to write screens/ to the database unless WebRTC fails.
+  fbPut(`syncControl/${deviceId}`, { logSync: true, fps: 1 });
 
   const container = document.getElementById('modal-container')!;
   container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
@@ -1148,11 +1149,15 @@ function showScreenModal(deviceId: string): void {
   });
 
   // ── WebRTC peer path: screen frames arrive directly over a DataChannel, so
-  // the heavy payload never goes through the database. Falls back to the RTDB
-  // SSE listener below if the peer connection can't be established. ──
+  // the heavy payload never touches the database. The RTDB screens/ fallback is
+  // armed only if the peer can't connect within a few seconds, and is torn down
+  // the moment the peer connects — so a healthy P2P session never hits the DB. ──
   const reasm = new Reassembler();
   let rtcPc: RTCPeerConnection | null = null;
   let answerSource: EventSource | null = null;
+  let rtcConnected = false;
+  let fallbackSource: EventSource | null = null;
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   function applyFrame(data: any): void {
     data.kind = 'rrweb'; // events inside the frame are already a parsed array
@@ -1164,12 +1169,56 @@ function showScreenModal(deviceId: string): void {
     infoEl.textContent = parts.join(' · ');
   }
 
+  // RTDB fallback: ask the agent to write screens/ and stream them over SSE.
+  // Only engaged when WebRTC can't be established.
+  function startRtdbFallback(): void {
+    if (rtcConnected || fallbackSource) return;
+    fbPut(`syncControl/${deviceId}`, { screenSync: true, logSync: true, fps: 1 });
+    fallbackSource = fbListen(`screens/${deviceId}`, async () => {
+      const data = await fbGet<any>(`screens/${deviceId}`);
+      if (!data) return;
+
+      if (data.kind === 'rrweb') {
+        // Events arrive as a JSON string (RTDB can't store the deep tree).
+        // Older agents may still send an array — handle both.
+        if (typeof data.events === 'string') {
+          try { data.events = JSON.parse(data.events); } catch { return; }
+        }
+        latestData = data;
+        // While the user is stepping a frozen window, don't yank the view.
+        if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
+      } else if (data.image) {
+        renderLegacyImage(data);
+      }
+
+      const parts = [`${data.width}×${data.height}`, data.url || ''];
+      if (data.title) parts.push(data.title);
+      parts.push(new Date(data.timestamp).toLocaleTimeString());
+      infoEl.textContent = parts.join(' · ');
+      if (data.kind !== 'rrweb' && !data.image && data.visibleText) {
+        infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
+      }
+    });
+    state.screenViewers.set(deviceId, fallbackSource);
+  }
+
+  // Peer is up: stop the database screen path entirely — close the SSE and tell
+  // the agent it no longer needs to write screens/ (keep the light log stream).
+  function onRtcConnected(): void {
+    if (rtcConnected) return;
+    rtcConnected = true;
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    if (fallbackSource) { fallbackSource.close(); fallbackSource = null; state.screenViewers.delete(deviceId); }
+    fbPut(`syncControl/${deviceId}`, { logSync: true, fps: 1 });
+  }
+
   async function startWebRtc(): Promise<void> {
     try {
       const pc = new RTCPeerConnection(RTC_CONFIG);
       rtcPc = pc;
       const session = Math.random().toString(36).slice(2);
       const ch = pc.createDataChannel('screen');
+      ch.onopen = onRtcConnected;
       ch.onmessage = (ev) => {
         let msg: any;
         try { msg = JSON.parse(ev.data); } catch { return; }
@@ -1188,41 +1237,15 @@ function showScreenModal(deviceId: string): void {
         if (!ans || ans.session !== session || pc.currentRemoteDescription) return;
         try { await pc.setRemoteDescription({ type: 'answer', sdp: ans.sdp }); } catch {}
       });
-    } catch { /* RTDB SSE path remains as fallback */ }
+    } catch { startRtdbFallback(); }
   }
   startWebRtc();
-
-  // SSE listen for screen updates
-  const source = fbListen(`screens/${deviceId}`, async () => {
-    const data = await fbGet<any>(`screens/${deviceId}`);
-    if (!data) return;
-
-    if (data.kind === 'rrweb') {
-      // Events are sent as a JSON string (RTDB can't store the deeply-nested
-      // raw tree). Older agents may still send an array — handle both.
-      if (typeof data.events === 'string') {
-        try { data.events = JSON.parse(data.events); } catch { return; }
-      }
-      latestData = data;
-      // While the user is stepping through a frozen window, don't yank the view.
-      if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
-    } else if (data.image) {
-      renderLegacyImage(data);
-    }
-
-    const parts = [`${data.width}×${data.height}`, data.url || ''];
-    if (data.title) parts.push(data.title);
-    parts.push(new Date(data.timestamp).toLocaleTimeString());
-    infoEl.textContent = parts.join(' · ');
-    if (data.kind !== 'rrweb' && !data.image && data.visibleText) {
-      infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
-    }
-  });
-
-  state.screenViewers.set(deviceId, source);
+  // Arm the database fallback only if the peer hasn't connected in time.
+  fallbackTimer = setTimeout(() => { if (!rtcConnected) startRtdbFallback(); }, 8000);
 
   const cleanup = () => {
-    source.close();
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    if (fallbackSource) { fallbackSource.close(); fallbackSource = null; }
     logSource.close();
     if (answerSource) answerSource.close();
     if (rtcPc) { try { rtcPc.close(); } catch {} rtcPc = null; }
@@ -1231,7 +1254,7 @@ function showScreenModal(deviceId: string): void {
     stopRaf();
     if (replayer) { try { replayer.destroy(); } catch {} replayer = null; }
     state.screenViewers.delete(deviceId);
-    fbPut(`syncControl/${deviceId}`, { screenSync: false });
+    fbPut(`syncControl/${deviceId}`, { screenSync: false, logSync: false });
     container.innerHTML = '';
   };
 
