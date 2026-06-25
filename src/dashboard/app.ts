@@ -1871,7 +1871,8 @@ function formatAgo(ts: number): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-function shortenUA(ua: string): string {
+function shortenUA(ua: string | undefined | null): string {
+  if (!ua) return 'Browser';
   if (ua.includes('iPhone')) return 'iPhone';
   if (ua.includes('Android')) return 'Android';
   if (ua.includes('Mac')) return 'Mac';
