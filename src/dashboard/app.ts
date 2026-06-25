@@ -1148,6 +1148,8 @@ function showScreenModal(deviceId: string): void {
   let replayer: import('rrweb').Replayer | null = null;
   let curBufferId: number | null = null;
   let curCount = 0;
+  let globalStartTime = 0; // timestamp of the very first event in the live Replayer
+  let windowsLog: Array<{ bufferId: number; events: any[] }> = []; // retained checkout windows, oldest→newest
 
   // Playback state. `live` = auto-follow the latest frame; when the user touches
   // any transport control we freeze on the current window so they can step through.
@@ -1322,58 +1324,32 @@ function showScreenModal(deviceId: string): void {
     }
   }
 
-  // Apply only the newly-arrived events to the existing Replayer, in small
-  // chunks that yield to the browser between batches. A heavy interaction can
-  // emit hundreds of mutations in one 1s flush; feeding them all synchronously
-  // blocks the main thread long enough that the tab is killed ("page crash").
-  // Yielding keeps the tab responsive — it may lag, but it never freezes.
+  // Continuous Replayer: a single long-lived rrweb.Replayer is built once from
+  // the first checkout window, then every later window's events are appended via
+  // addEvent(). rrweb treats each window's Meta+FullSnapshot as a checkout point,
+  // so seeking backward across windows rebuilds the DOM from the nearest snapshot
+  // — giving a scrubbable history instead of only the latest ~10s. The iframe is
+  // never torn down per window (that was the source of the rebuild white-flash);
+  // we only rebuild occasionally to bound memory.
+  //
+  // addEvent runs in small chunks that yield between batches: a heavy interaction
+  // can emit hundreds of mutations in one flush; feeding them synchronously
+  // blocks the main thread long enough to crash the tab. Yielding keeps the tab
+  // responsive — it may lag, but it never freezes.
   const FEED_CHUNK = 60;
+  const MAX_WINDOWS = 30; // ~5 min of 10s windows kept in memory
+  const TRIM_TO = 20;     // rebuild down to this many windows when the cap is hit
   const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
 
-  async function feedIncremental(data: any): Promise<void> {
-    const startTime = replayer!.getMetaData().startTime;
-    const from = curCount;
-    let i = curCount;
-    let addErrors = 0;
-    let firstErr: any = null;
-    console.log('[sync] feed start', { from, to: data.events.length, bufferId: data.bufferId });
-    while (i < data.events.length) {
-      const end = Math.min(i + FEED_CHUNK, data.events.length);
-      for (; i < end; i++) {
-        try {
-          replayer!.addEvent(data.events[i]);
-        } catch (e) {
-          addErrors++;
-          if (!firstErr) { firstErr = e; console.warn('[sync] addEvent threw', { idx: i, evType: data.events[i]?.type, err: String((e as any)?.message || e) }); }
-        }
-        const o = data.events[i].timestamp - startTime;
-        if (o >= 0) curOffsets.push(o);
-      }
-      curCount = i;
-      if (i < data.events.length) await nextFrame(); // let the browser breathe
-    }
-    let pauseErr: any = null;
-    curTotal = Math.max(curTotal, replayer!.getMetaData().totalTime);
-    if (live) {
-      offset = curTotal;
-      try { replayer!.pause(offset); } catch (e) { pauseErr = e; console.warn('[sync] pause threw', String((e as any)?.message || e)); }
-    }
-    logView('feed done', { added: i - from, addErrors, total: curTotal, pauseErr: pauseErr ? String(pauseErr) : null });
-    syncTransport();
-  }
-
-  function buildFresh(rrweb: any, data: any): boolean {
-    // Build a fresh Replayer into a holder appended alongside the current view and
-    // only swap it in once construction succeeds — so if the Replayer throws, the
-    // previous frame stays on screen instead of leaving the stage blank. (Don't
-    // build detached and move it: re-parenting the replay iframe reloads it and
-    // wipes the rendered content.)
-    // rrweb's Replayer throws on a single event ("need at least 2 events"). The
-    // agent's flush can catch a fresh checkout window holding only its Meta event
-    // before the FullSnapshot is appended; skip and wait for the next frame
-    // (which arrives as a delta that grows the window past 2 events).
-    if (!Array.isArray(data.events) || data.events.length < 2) {
-      console.log('[sync] build skip (need >=2 events)', { events: data.events?.length, bufferId: data.bufferId });
+  // Build (or rebuild) the Replayer from a flat, self-contained event list whose
+  // first events are a Meta+FullSnapshot. Resets the global timeline. Returns
+  // false (keeping the previous view) if the list is too short or rrweb throws.
+  function mountReplayer(rrweb: any, events: any[], width: number, height: number): boolean {
+    // rrweb's Replayer constructor throws on a single event ("need at least 2");
+    // a fresh checkout window can briefly hold only its Meta event. Skip and wait
+    // for the next frame, which grows it past 2 events.
+    if (!Array.isArray(events) || events.length < 2) {
+      console.log('[sync] mount skip (need >=2 events)', { events: events?.length });
       return false;
     }
     imgEl.style.display = 'none';
@@ -1381,14 +1357,13 @@ function showScreenModal(deviceId: string): void {
     const holder = document.createElement('div');
     stageEl.appendChild(holder);
     let next: import('rrweb').Replayer;
-    console.log('[sync] build start', { events: data.events.length, bufferId: data.bufferId, w: data.width, h: data.height });
     try {
-      next = new rrweb.Replayer(data.events, {
+      next = new rrweb.Replayer(events, {
         root: holder, liveMode: false, mouseTail: false, showWarning: false, showDebug: false,
       });
     } catch (e) {
       holder.remove();
-      console.error('[sync] build THREW', String((e as any)?.stack || (e as any)?.message || e));
+      console.error('[sync] mount THREW', String((e as any)?.stack || (e as any)?.message || e));
       if (!replayer) infoEl.textContent = '该页面无法回放（可能内嵌了跨域 iframe）';
       return false; // keep the last good frame
     }
@@ -1397,46 +1372,117 @@ function showScreenModal(deviceId: string): void {
       if (child !== holder) child.remove(); // drop the old replayer's DOM
     }
     replayer = next;
-    curBufferId = data.bufferId;
-    curCount = data.events.length;
-    playing = false;
-    stopRaf();
     const meta = replayer.getMetaData();
+    globalStartTime = meta.startTime;
     curTotal = Math.max(0, meta.totalTime);
-    curOffsets = data.events
+    curOffsets = events
       .map((e: any) => e.timestamp - meta.startTime)
-      .filter((o: number) => o >= 0 && o <= curTotal)
+      .filter((o: number) => o >= 0)
       .sort((a: number, b: number) => a - b);
-    offset = curTotal; // newest window starts at its latest frame
-    replayer.pause(offset);
-    // On rebuild, rrweb leaves the new iframe collapsed (display:none / 0x0)
-    // until its Meta event is "played" — but on a re-checkout window that timing
-    // is unreliable, so the stage stays blank despite a fully built DOM. Force
-    // the iframe + wrapper visible and sized to the recorded viewport, both now
-    // and on the next frame (rrweb may toggle display:none asynchronously after
-    // pause()).
+    // rrweb can leave a freshly built iframe collapsed (display:none / 0x0) until
+    // its Meta event is "played"; force it visible + sized to the recorded
+    // viewport now and next frame (rrweb may toggle display asynchronously).
     const forceSize = (): void => {
       const f = replayer?.iframe;
       if (f) {
         f.style.display = 'block';
-        f.style.width = data.width + 'px';
-        f.style.height = data.height + 'px';
-        f.setAttribute('width', String(data.width));
-        f.setAttribute('height', String(data.height));
+        f.style.width = width + 'px';
+        f.style.height = height + 'px';
+        f.setAttribute('width', String(width));
+        f.setAttribute('height', String(height));
       }
       const w = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
-      if (w) {
-        w.style.display = 'block';
-        w.style.width = data.width + 'px';
-        w.style.height = data.height + 'px';
-      }
+      if (w) { w.style.display = 'block'; w.style.width = width + 'px'; w.style.height = height + 'px'; }
     };
     forceSize();
-    fitScale(data.width, data.height);
-    requestAnimationFrame(() => { forceSize(); fitScale(data.width, data.height); });
-    logView('build ok', { total: curTotal });
-    syncTransport();
+    fitScale(width, height);
+    requestAnimationFrame(() => { forceSize(); fitScale(width, height); });
     return true;
+  }
+
+  // Append events [from,to) of the current window into the live Replayer.
+  async function feedTail(data: any, from: number, to: number): Promise<void> {
+    const entry = windowsLog[windowsLog.length - 1];
+    let i = from, addErrors = 0;
+    while (i < to) {
+      const end = Math.min(i + FEED_CHUNK, to);
+      for (; i < end; i++) {
+        try { replayer!.addEvent(data.events[i]); } catch { addErrors++; }
+        entry.events.push(data.events[i]);
+        const o = data.events[i].timestamp - globalStartTime;
+        if (o >= 0) curOffsets.push(o);
+      }
+      curCount = i;
+      if (i < to) await nextFrame(); // let the browser breathe
+    }
+    if (addErrors) console.warn('[sync] feedTail addErrors', addErrors);
+  }
+
+  // Append a brand-new checkout window (its own Meta+FullSnapshot) to the same
+  // Replayer — no rebuild, so the iframe and earlier history stay intact.
+  async function appendWindow(data: any): Promise<void> {
+    const entry = { bufferId: data.bufferId, events: [] as any[] };
+    windowsLog.push(entry);
+    let i = 0, addErrors = 0;
+    while (i < data.events.length) {
+      const end = Math.min(i + FEED_CHUNK, data.events.length);
+      for (; i < end; i++) {
+        try { replayer!.addEvent(data.events[i]); } catch { addErrors++; }
+        entry.events.push(data.events[i]);
+        const o = data.events[i].timestamp - globalStartTime;
+        if (o >= 0) curOffsets.push(o);
+      }
+      if (i < data.events.length) await nextFrame();
+    }
+    curBufferId = data.bufferId;
+    curCount = data.events.length;
+    if (addErrors) console.warn('[sync] appendWindow addErrors', addErrors);
+  }
+
+  // Bound memory: once we exceed MAX_WINDOWS, drop the oldest windows and rebuild
+  // from the remaining (still self-contained) list. Only while live, so a user
+  // scrubbing history is never disrupted; this fires rarely (~every few minutes).
+  function maybeTrim(rrweb: any, width: number, height: number): void {
+    if (!live || windowsLog.length <= MAX_WINDOWS) return;
+    windowsLog = windowsLog.slice(windowsLog.length - TRIM_TO);
+    const flat = windowsLog.reduce((acc: any[], w) => acc.concat(w.events), [] as any[]);
+    console.log('[sync] trim+rebuild', { windows: windowsLog.length, events: flat.length });
+    if (mountReplayer(rrweb, flat, width, height)) {
+      const lastW = windowsLog[windowsLog.length - 1];
+      curBufferId = lastW.bufferId;
+      curCount = lastW.events.length;
+      offset = curTotal; // live → jump to the new end
+      try { replayer!.pause(offset); } catch {}
+    }
+  }
+
+  async function ingest(rrweb: any, data: any): Promise<void> {
+    if (!replayer) {
+      if (!mountReplayer(rrweb, data.events, data.width, data.height)) return;
+      windowsLog = [{ bufferId: data.bufferId, events: data.events.slice() }];
+      curBufferId = data.bufferId;
+      curCount = data.events.length;
+      offset = curTotal;
+      try { replayer!.pause(offset); } catch {}
+      logView('mount ok', { total: curTotal, windows: 1 });
+      syncTransport();
+      return;
+    }
+    if (data.bufferId === curBufferId) {
+      console.log('[sync] feed tail', { src: data._src, bufferId: data.bufferId, have: curCount, now: data.events.length });
+      await feedTail(data, curCount, data.events.length);
+    } else {
+      console.log('[sync] append window', { src: data._src, prev: curBufferId, next: data.bufferId, events: data.events.length });
+      await appendWindow(data);
+    }
+    curTotal = Math.max(curTotal, replayer.getMetaData().totalTime);
+    if (live) {
+      offset = curTotal; // auto-follow the latest frame
+      try { replayer.pause(offset); } catch (e) { console.warn('[sync] pause threw', String((e as any)?.message || e)); }
+    }
+    maybeTrim(rrweb, data.width, data.height);
+    logView('ingest done', { total: curTotal, windows: windowsLog.length, offset: Math.round(offset) });
+    syncTransport();
   }
 
   // Coalescing render pump: callers just update latestData and call requestRender().
@@ -1454,32 +1500,26 @@ function showScreenModal(deviceId: string): void {
 
   async function pumpRender(): Promise<void> {
     const rrweb = await loadRrweb(); // lazy: only fetched when a screen is opened
-    while (live && latestData && stageEl.isConnected) {
+    // Ingest regardless of `live` so history keeps accumulating even while the
+    // user is paused/scrubbing; ingest() only moves the playhead when live.
+    while (latestData && stageEl.isConnected) {
       const data = latestData;
       if (!Array.isArray(data.events) || data.events.length === 0) return;
       // Monotonic guard. bufferId is the agent's checkout timestamp, so it only
       // ever increases for a live page. The same window can arrive via TWO
       // transports at once (WebRTC delta stream + RTDB full-snapshot fallback);
-      // without this guard the pump rebuilds *backward* to an older/smaller
-      // window on every interleaved frame, which flashes the stage white.
+      // without this guard we'd re-ingest a duplicate or step back to an older
+      // window.
       if (replayer && curBufferId !== null) {
         if (data.bufferId < curBufferId) {
           console.log('[sync] skip stale window', { src: data._src, drop: data.bufferId, cur: curBufferId });
           return; // older checkout — ignore entirely
         }
         if (data.bufferId === curBufferId && data.events.length <= curCount) {
-          return; // same window, no new (or duplicate/fewer) events — already shown
+          return; // same window, no new (or duplicate/fewer) events — already applied
         }
       }
-      // Same window grew → feed only the new events (chunked, yielding).
-      if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
-        console.log('[sync] pump -> feed', { src: data._src, bufferId: data.bufferId, have: curCount, now: data.events.length });
-        await feedIncremental(data);
-      } else {
-        console.log('[sync] pump -> build', { src: data._src, reason: !replayer ? 'no-replayer' : 'new-bufferId', curBufferId, newBufferId: data.bufferId, curCount, now: data.events.length });
-        // New (strictly newer) window or first frame → one full rebuild.
-        if (!buildFresh(rrweb, data)) return;
-      }
+      await ingest(rrweb, data);
       // latestData may have advanced while we worked — loop again to catch up.
     }
   }
@@ -1499,6 +1539,8 @@ function showScreenModal(deviceId: string): void {
   liveBtn.addEventListener('click', () => {
     live = true;
     if (playing) pausePlayback();
+    offset = curTotal; // jump back to the latest frame
+    if (replayer) { try { replayer.pause(offset); } catch {} }
     if (latestData) requestRender();
     syncTransport();
   });
@@ -1518,7 +1560,7 @@ function showScreenModal(deviceId: string): void {
     data.kind = 'rrweb'; // events inside the frame are already a parsed array
     data._src = 'rtc';
     latestData = data;
-    if (live) requestRender();
+    requestRender(); // ingest always; playhead only follows when live
     const parts = [`${data.width}×${data.height}`, data.url || ''];
     if (data.title) parts.push(data.title);
     parts.push(new Date(data.timestamp).toLocaleTimeString());
@@ -1543,8 +1585,9 @@ function showScreenModal(deviceId: string): void {
         if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
         data._src = 'rtdb';
         latestData = data;
-        // While the user is stepping a frozen window, don't yank the view.
-        if (live) requestRender();
+        // Ingest into the continuous Replayer even while the user is stepping a
+        // frozen view; ingest() leaves the playhead put unless live.
+        requestRender();
       } else if (data.image) {
         renderLegacyImage(data);
       }
