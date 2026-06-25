@@ -1094,6 +1094,35 @@ function showScreenModal(deviceId: string): void {
     seekTo(target);
   }
 
+  // rrweb replays every recorded <iframe> as a sandboxed about:blank frame. On
+  // pages whose main content lives in a (often cross-origin) iframe the browser
+  // can't reconstruct it, the Replayer throws mid-build, and — because the stage
+  // was already cleared — the viewer goes fully white. We can never mirror a
+  // cross-origin iframe from inside the page anyway (and getDisplayMedia isn't
+  // available on iOS), so strip iframe nodes out of the stream entirely: the rest
+  // of the DOM then replays reliably. Editing each event in place keeps the event
+  // count stable, so incremental addEvent() indexing stays valid.
+  function pruneIframeNodes(node: any): void {
+    if (!node || !Array.isArray(node.childNodes)) return;
+    node.childNodes = node.childNodes.filter(
+      (c: any) => !(c && c.type === 2 && String(c.tagName).toLowerCase() === 'iframe'),
+    );
+    for (const c of node.childNodes) pruneIframeNodes(c);
+  }
+  function sanitizeEvents(events: any[]): any[] {
+    for (const ev of events) {
+      if (ev?.type === 2 && ev.data?.node) {
+        pruneIframeNodes(ev.data.node); // FullSnapshot
+      } else if (ev?.type === 3 && ev.data?.source === 0 && Array.isArray(ev.data.adds)) {
+        ev.data.adds = ev.data.adds.filter(
+          (a: any) => !(a?.node && a.node.type === 2 && String(a.node.tagName).toLowerCase() === 'iframe'),
+        );
+        for (const a of ev.data.adds) pruneIframeNodes(a.node); // Mutation adds
+      }
+    }
+    return events;
+  }
+
   async function renderRrweb(data: any): Promise<void> {
     if (!Array.isArray(data.events) || data.events.length === 0) return;
     // Nothing new — skip.
@@ -1107,35 +1136,51 @@ function showScreenModal(deviceId: string): void {
     // which freezes/crashes the tab on iframe-heavy pages — so never rebuild
     // unless the window actually changed (new checkout / new viewer).
     if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
-      const meta = replayer.getMetaData();
+      const startTime = replayer.getMetaData().startTime;
       for (let i = curCount; i < data.events.length; i++) {
         try { replayer.addEvent(data.events[i]); } catch {}
-        const o = data.events[i].timestamp - meta.startTime;
+        const o = data.events[i].timestamp - startTime;
         if (o >= 0) curOffsets.push(o);
       }
       curCount = data.events.length;
-      curTotal = Math.max(curTotal, meta.totalTime);
+      curTotal = Math.max(curTotal, replayer.getMetaData().totalTime); // re-read after add
       if (live) { offset = curTotal; replayer.pause(offset); } // follow latest frame
       syncTransport();
       return;
     }
 
-    // New window (or first frame): build a fresh Replayer once.
-    curBufferId = data.bufferId;
-    curCount = data.events.length;
+    // New window (or first frame): build a fresh Replayer. Build into a holder
+    // appended alongside the current view and only swap it in once construction
+    // succeeds — so if the Replayer throws, the previous frame stays on screen
+    // instead of leaving the stage blank. (Don't build detached and move it:
+    // re-parenting the replay iframe reloads it and wipes the rendered content.)
     imgEl.style.display = 'none';
     stageEl.style.display = 'block';
-    stageEl.innerHTML = '';
+    const holder = document.createElement('div');
+    stageEl.appendChild(holder);
+    let next: import('rrweb').Replayer;
+    try {
+      next = new rrweb.Replayer(data.events, {
+        root: holder,
+        liveMode: false,
+        mouseTail: false,
+        showWarning: false,
+        showDebug: false,
+      });
+    } catch (e) {
+      holder.remove();
+      if (!replayer) infoEl.textContent = '该页面无法回放（可能内嵌了跨域 iframe）';
+      return; // keep the last good frame
+    }
     if (replayer) { try { replayer.destroy(); } catch {} }
+    for (const child of Array.from(stageEl.children)) {
+      if (child !== holder) child.remove(); // drop the old replayer's DOM
+    }
+    replayer = next;
+    curBufferId = data.bufferId;
+    curCount = data.events.length;
     playing = false;
     stopRaf();
-    replayer = new rrweb.Replayer(data.events, {
-      root: stageEl,
-      liveMode: false,
-      mouseTail: false,
-      showWarning: false,
-      showDebug: false,
-    });
     const meta = replayer.getMetaData();
     curTotal = Math.max(0, meta.totalTime);
     curOffsets = data.events
@@ -1203,6 +1248,7 @@ function showScreenModal(deviceId: string): void {
         if (typeof data.events === 'string') {
           try { data.events = JSON.parse(data.events); } catch { return; }
         }
+        if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
         latestData = data;
         // While the user is stepping a frozen window, don't yank the view.
         if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
@@ -1253,11 +1299,11 @@ function showScreenModal(deviceId: string): void {
         try { frame = JSON.parse(done.payload); } catch { return; }
         if (done.kind === 'full') {
           rtcBufferId = frame.bufferId;
-          rtcEvents = frame.events || [];
+          rtcEvents = sanitizeEvents(frame.events || []);
           rtcMeta = { url: frame.url, title: frame.title, width: frame.width, height: frame.height };
         } else if (done.kind === 'delta') {
           if (frame.bufferId !== rtcBufferId) return; // missed the base window; wait for next full
-          rtcEvents = rtcEvents.concat(frame.events || []);
+          rtcEvents = rtcEvents.concat(sanitizeEvents(frame.events || []));
         } else {
           return;
         }
