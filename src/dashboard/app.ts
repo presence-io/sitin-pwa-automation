@@ -1219,14 +1219,30 @@ function showScreenModal(deviceId: string): void {
       const session = Math.random().toString(36).slice(2);
       const ch = pc.createDataChannel('screen');
       ch.onopen = onRtcConnected;
+      // The agent streams a 'full' window per checkout, then 'delta' frames with
+      // only new events. Rebuild the running window locally so renderRrweb still
+      // gets a complete event array — the wire just carries deltas.
+      let rtcEvents: any[] = [];
+      let rtcBufferId: any = null;
+      let rtcMeta: any = {};
       ch.onmessage = (ev) => {
         let msg: any;
         try { msg = JSON.parse(ev.data); } catch { return; }
         const done = reasm.push(msg);
-        if (!done || done.kind !== 'window') return;
+        if (!done) return;
         let frame: any;
         try { frame = JSON.parse(done.payload); } catch { return; }
-        applyFrame(frame);
+        if (done.kind === 'full') {
+          rtcBufferId = frame.bufferId;
+          rtcEvents = frame.events || [];
+          rtcMeta = { url: frame.url, title: frame.title, width: frame.width, height: frame.height };
+        } else if (done.kind === 'delta') {
+          if (frame.bufferId !== rtcBufferId) return; // missed the base window; wait for next full
+          rtcEvents = rtcEvents.concat(frame.events || []);
+        } else {
+          return;
+        }
+        applyFrame({ bufferId: rtcBufferId, events: rtcEvents, ...rtcMeta, timestamp: frame.timestamp });
       };
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);

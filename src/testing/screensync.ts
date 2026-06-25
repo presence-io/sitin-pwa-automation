@@ -26,6 +26,12 @@ let buffer: any[] = [];
 let bufferId = 0;
 let dirty = false;
 
+// Over the WebRTC stream we send the full window once per checkout and then only
+// the newly-recorded events (deltas) — this slashes relay/TURN bandwidth. Track
+// what we've already streamed for the current window/channel.
+let rtcSentBufferId = 0;
+let rtcSentCount = 0;
+
 const SELF_UI = '#autobot-fab, #autobot-panel, #autobot-minibar, #autobot-text-picker, #autobot-assert-popup';
 
 // Start rrweb recording if not already running. Recording is shared between the
@@ -77,31 +83,42 @@ function maybeStopRecording(): void {
   log('Screen sync stopped');
 }
 
-function buildFrame(): string {
-  return JSON.stringify({
-    bufferId,
-    events: buffer,
-    url: location.pathname + location.search,
-    title: document.title,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    timestamp: Date.now(),
-  });
-}
-
 async function flush(): Promise<void> {
   if (!dirty || buffer.length === 0) return;
   dirty = false;
-  const frame = buildFrame();
 
   // Prefer the peer-to-peer channel: heavy data never touches the database.
+  // Stream the full window only when it changes (new checkout / new channel);
+  // otherwise send just the events recorded since the last flush.
   if (rtcChannel && rtcChannel.readyState === 'open') {
-    try { sendChunked(rtcChannel, 'window', frame); } catch (e) { warn('rtc send failed', e); }
+    try {
+      if (bufferId !== rtcSentBufferId) {
+        sendChunked(rtcChannel, 'full', JSON.stringify({
+          bufferId,
+          events: buffer,
+          url: location.pathname + location.search,
+          title: document.title,
+          width: window.innerWidth,
+          height: window.innerHeight,
+          timestamp: Date.now(),
+        }));
+        rtcSentBufferId = bufferId;
+        rtcSentCount = buffer.length;
+      } else if (buffer.length > rtcSentCount) {
+        sendChunked(rtcChannel, 'delta', JSON.stringify({
+          bufferId,
+          events: buffer.slice(rtcSentCount),
+          timestamp: Date.now(),
+        }));
+        rtcSentCount = buffer.length;
+      }
+    } catch (e) { warn('rtc send failed', e); }
     return;
   }
 
-  // Fallback: write to RTDB (events serialized as a string to dodge the
-  // 32-level depth / forbidden-key limits that otherwise 400 the write).
+  // Fallback: write the full self-contained window to RTDB (events serialized as
+  // a string to dodge the 32-level depth / forbidden-key limits that 400 the
+  // write). A single last-write-wins key can't carry deltas, so it stays full.
   if (rtdbActive) {
     const deviceId = getDeviceId();
     await fbPut(`screens/${deviceId}`, {
@@ -153,6 +170,9 @@ async function answerOffer(offer: any): Promise<void> {
       // stale screens/ node so the viewer never falls back to old data.
       rtdbActive = false;
       fbDelete(`screens/${deviceId}`);
+      // Force the next flush to send a full window to this fresh viewer.
+      rtcSentBufferId = 0;
+      rtcSentCount = 0;
       startRecording(1).then(() => { dirty = true; flush(); });
       log('Screen sync: WebRTC peer connected');
     };
