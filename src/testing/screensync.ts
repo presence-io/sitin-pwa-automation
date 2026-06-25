@@ -61,7 +61,10 @@ async function flush(): Promise<void> {
   await fbPut(`screens/${deviceId}`, {
     kind: 'rrweb',
     bufferId,
-    events: buffer,
+    // Serialize events to a single string: rrweb's DOM-tree snapshots nest far
+    // deeper than Firebase RTDB's 32-level limit and can contain keys with
+    // chars RTDB forbids (. $ # [ ] /), both of which make a raw write 400.
+    events: JSON.stringify(buffer),
     url: location.pathname + location.search,
     title: document.title,
     width: window.innerWidth,

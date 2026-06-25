@@ -1152,6 +1152,11 @@ function showScreenModal(deviceId: string): void {
     if (!data) return;
 
     if (data.kind === 'rrweb') {
+      // Events are sent as a JSON string (RTDB can't store the deeply-nested
+      // raw tree). Older agents may still send an array — handle both.
+      if (typeof data.events === 'string') {
+        try { data.events = JSON.parse(data.events); } catch { return; }
+      }
       latestData = data;
       // While the user is stepping through a frozen window, don't yank the view.
       if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
