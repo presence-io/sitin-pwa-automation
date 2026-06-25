@@ -34,6 +34,13 @@ let rtcSentCount = 0;
 
 const SELF_UI = '#autobot-fab, #autobot-panel, #autobot-minibar, #autobot-text-picker, #autobot-assert-popup';
 
+// Also block iframes from being recorded. The Replayer rebuilds every recorded
+// iframe as a sandboxed about:blank frame; on iframe-heavy pages this floods the
+// console with "Blocked script execution … sandboxed" and a failing iframe
+// reconstruction blanks the whole stage (white-screen crash). Recording them as
+// placeholders keeps the page layout while making replay stable.
+const BLOCK_SELECTOR = `${SELF_UI}, iframe`;
+
 // Start rrweb recording if not already running. Recording is shared between the
 // WebRTC and RTDB sinks — whichever is active drives the flush.
 async function startRecording(fps = 1): Promise<void> {
@@ -55,7 +62,7 @@ async function startRecording(fps = 1): Promise<void> {
         dirty = true;
       },
       checkoutEveryNms: 10000,
-      blockSelector: SELF_UI,
+      blockSelector: BLOCK_SELECTOR,
       recordCanvas: false,
       collectFonts: false,
       inlineStylesheet: true, // inline CSS rules → no cross-origin canvas taint
