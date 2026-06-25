@@ -1102,25 +1102,54 @@ function showScreenModal(deviceId: string): void {
   // available on iOS), so strip iframe nodes out of the stream entirely: the rest
   // of the DOM then replays reliably. Editing each event in place keeps the event
   // count stable, so incremental addEvent() indexing stays valid.
-  function pruneIframeNodes(node: any): void {
-    if (!node || !Array.isArray(node.childNodes)) return;
-    node.childNodes = node.childNodes.filter(
-      (c: any) => !(c && c.type === 2 && String(c.tagName).toLowerCase() === 'iframe'),
-    );
-    for (const c of node.childNodes) pruneIframeNodes(c);
+  function pruneIframeNodes(node: any): number {
+    if (!node || !Array.isArray(node.childNodes)) return 0;
+    let removed = 0;
+    node.childNodes = node.childNodes.filter((c: any) => {
+      const isIframe = c && c.type === 2 && String(c.tagName).toLowerCase() === 'iframe';
+      if (isIframe) removed++;
+      return !isIframe;
+    });
+    for (const c of node.childNodes) removed += pruneIframeNodes(c);
+    return removed;
   }
   function sanitizeEvents(events: any[]): any[] {
+    let removed = 0;
     for (const ev of events) {
       if (ev?.type === 2 && ev.data?.node) {
-        pruneIframeNodes(ev.data.node); // FullSnapshot
+        removed += pruneIframeNodes(ev.data.node); // FullSnapshot
       } else if (ev?.type === 3 && ev.data?.source === 0 && Array.isArray(ev.data.adds)) {
+        const before = ev.data.adds.length;
         ev.data.adds = ev.data.adds.filter(
           (a: any) => !(a?.node && a.node.type === 2 && String(a.node.tagName).toLowerCase() === 'iframe'),
         );
-        for (const a of ev.data.adds) pruneIframeNodes(a.node); // Mutation adds
+        removed += before - ev.data.adds.length;
+        for (const a of ev.data.adds) removed += pruneIframeNodes(a.node); // Mutation adds
       }
     }
+    if (removed > 0) console.log('[sync] stripped iframes', { count: removed, events: events.length });
     return events;
+  }
+
+  // Dump what the replay iframe actually contains, to tell "blank because the
+  // content was stripped" apart from "full but visually white / mis-scaled".
+  function viewDiag(): any {
+    try {
+      const ifr = replayer?.iframe;
+      const body = ifr?.contentDocument?.body;
+      const html = body?.innerHTML || '';
+      return {
+        bodyKids: body?.childElementCount,
+        textLen: (body?.textContent || '').trim().length,
+        htmlLen: html.length,
+        bg: body ? getComputedStyle(body).backgroundColor : null,
+        ifrSize: ifr ? `${ifr.clientWidth}x${ifr.clientHeight}` : null,
+        bodySize: body ? `${body.scrollWidth}x${body.scrollHeight}` : null,
+        sample: html.replace(/\s+/g, ' ').slice(0, 200),
+      };
+    } catch (e) {
+      return { diagErr: String(e) };
+    }
   }
 
   // Apply only the newly-arrived events to the existing Replayer, in small
@@ -1159,8 +1188,7 @@ function showScreenModal(deviceId: string): void {
       offset = curTotal;
       try { replayer!.pause(offset); } catch (e) { pauseErr = e; console.warn('[sync] pause threw', String((e as any)?.message || e)); }
     }
-    const iframeEmpty = !replayer!.iframe?.contentDocument?.body?.firstChild;
-    console.log('[sync] feed done', { added: i - from, addErrors, total: curTotal, iframeEmpty, pauseErr: pauseErr ? String(pauseErr) : null });
+    console.log('[sync] feed done', { added: i - from, addErrors, total: curTotal, pauseErr: pauseErr ? String(pauseErr) : null, ...viewDiag() });
     syncTransport();
   }
 
@@ -1204,8 +1232,7 @@ function showScreenModal(deviceId: string): void {
     offset = curTotal; // newest window starts at its latest frame
     replayer.pause(offset);
     fitScale(data.width, data.height);
-    const iframeEmpty = !replayer.iframe?.contentDocument?.body?.firstChild;
-    console.log('[sync] build ok', { total: curTotal, iframeEmpty });
+    console.log('[sync] build ok', { total: curTotal, ...viewDiag() });
     syncTransport();
     return true;
   }
