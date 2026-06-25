@@ -1223,12 +1223,17 @@ function showScreenModal(deviceId: string): void {
       const body = ifr?.contentDocument?.body;
       const html = body?.innerHTML || '';
       const wrapper = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
+      const ifrCs = ifr ? getComputedStyle(ifr) : null;
+      const wrapCs = wrapper ? getComputedStyle(wrapper) : null;
       console.log(
         '[sync] ' + tag,
         extra,
         '| stage', stageEl.clientWidth + 'x' + stageEl.clientHeight,
         'transform', wrapper?.style.transform || '(none)',
         'ifr', ifr ? ifr.clientWidth + 'x' + ifr.clientHeight : 'null',
+        'ifrCss', ifrCs ? `${ifrCs.display}/${ifrCs.width}x${ifrCs.height}` : '-',
+        'wrap', wrapper ? `${wrapper.clientWidth}x${wrapper.clientHeight}` : '-',
+        'wrapCss', wrapCs ? `${wrapCs.display}/${wrapCs.width}x${wrapCs.height}` : '-',
         'body', body ? body.scrollWidth + 'x' + body.scrollHeight : 'null',
         'kids', body?.childElementCount,
         'textLen', (body?.textContent || '').trim().length,
@@ -1287,6 +1292,14 @@ function showScreenModal(deviceId: string): void {
     // previous frame stays on screen instead of leaving the stage blank. (Don't
     // build detached and move it: re-parenting the replay iframe reloads it and
     // wipes the rendered content.)
+    // rrweb's Replayer throws on a single event ("need at least 2 events"). The
+    // agent's flush can catch a fresh checkout window holding only its Meta event
+    // before the FullSnapshot is appended; skip and wait for the next frame
+    // (which arrives as a delta that grows the window past 2 events).
+    if (!Array.isArray(data.events) || data.events.length < 2) {
+      console.log('[sync] build skip (need >=2 events)', { events: data.events?.length, bufferId: data.bufferId });
+      return false;
+    }
     imgEl.style.display = 'none';
     stageEl.style.display = 'block';
     const holder = document.createElement('div');
@@ -1320,23 +1333,31 @@ function showScreenModal(deviceId: string): void {
       .sort((a: number, b: number) => a - b);
     offset = curTotal; // newest window starts at its latest frame
     replayer.pause(offset);
-    // rrweb sizes its iframe from the recording's Meta event (type 4). The
-    // agent's re-checkout windows often omit Meta, so on every rebuild rrweb
-    // leaves the iframe at 0x0 → blank stage despite a fully built DOM. Force
-    // the iframe (and its wrapper) to the recorded viewport ourselves.
-    const builtIfr = replayer.iframe;
-    if (builtIfr) {
-      builtIfr.width = String(data.width);
-      builtIfr.height = String(data.height);
-      builtIfr.style.width = data.width + 'px';
-      builtIfr.style.height = data.height + 'px';
-    }
-    const builtWrap = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
-    if (builtWrap) {
-      builtWrap.style.width = data.width + 'px';
-      builtWrap.style.height = data.height + 'px';
-    }
+    // On rebuild, rrweb leaves the new iframe collapsed (display:none / 0x0)
+    // until its Meta event is "played" — but on a re-checkout window that timing
+    // is unreliable, so the stage stays blank despite a fully built DOM. Force
+    // the iframe + wrapper visible and sized to the recorded viewport, both now
+    // and on the next frame (rrweb may toggle display:none asynchronously after
+    // pause()).
+    const forceSize = (): void => {
+      const f = replayer?.iframe;
+      if (f) {
+        f.style.display = 'block';
+        f.style.width = data.width + 'px';
+        f.style.height = data.height + 'px';
+        f.setAttribute('width', String(data.width));
+        f.setAttribute('height', String(data.height));
+      }
+      const w = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
+      if (w) {
+        w.style.display = 'block';
+        w.style.width = data.width + 'px';
+        w.style.height = data.height + 'px';
+      }
+    };
+    forceSize();
     fitScale(data.width, data.height);
+    requestAnimationFrame(() => { forceSize(); fitScale(data.width, data.height); });
     logView('build ok', { total: curTotal });
     syncTransport();
     return true;
