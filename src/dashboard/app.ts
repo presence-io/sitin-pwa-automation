@@ -1039,6 +1039,7 @@ function showScreenModal(deviceId: string): void {
     wrapper.style.transform = `scale(${scale})`;
     wrapper.style.transformOrigin = 'top left';
     stageEl.style.height = Math.round(h * scale) + 'px';
+    console.log('[sync] fitScale', { stageW: stageEl.clientWidth, recW: w, recH: h, scale });
   }
 
   function stopRaf(): void {
@@ -1131,24 +1132,31 @@ function showScreenModal(deviceId: string): void {
     return events;
   }
 
-  // Dump what the replay iframe actually contains, to tell "blank because the
-  // content was stripped" apart from "full but visually white / mis-scaled".
-  function viewDiag(): any {
+  // Log what the replay iframe contains AND how it's scaled/sized, as flat
+  // primitive args so the console never truncates the useful fields. Tells
+  // "blank because content was stripped" apart from "full DOM but invisible
+  // due to scale 0 / collapsed stage / mis-fit".
+  function logView(tag: string, extra: Record<string, any>): void {
     try {
       const ifr = replayer?.iframe;
       const body = ifr?.contentDocument?.body;
       const html = body?.innerHTML || '';
-      return {
-        bodyKids: body?.childElementCount,
-        textLen: (body?.textContent || '').trim().length,
-        htmlLen: html.length,
-        bg: body ? getComputedStyle(body).backgroundColor : null,
-        ifrSize: ifr ? `${ifr.clientWidth}x${ifr.clientHeight}` : null,
-        bodySize: body ? `${body.scrollWidth}x${body.scrollHeight}` : null,
-        sample: html.replace(/\s+/g, ' ').slice(0, 200),
-      };
+      const wrapper = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
+      console.log(
+        '[sync] ' + tag,
+        extra,
+        '| stage', stageEl.clientWidth + 'x' + stageEl.clientHeight,
+        'transform', wrapper?.style.transform || '(none)',
+        'ifr', ifr ? ifr.clientWidth + 'x' + ifr.clientHeight : 'null',
+        'body', body ? body.scrollWidth + 'x' + body.scrollHeight : 'null',
+        'kids', body?.childElementCount,
+        'textLen', (body?.textContent || '').trim().length,
+        'htmlLen', html.length,
+        'bg', body ? getComputedStyle(body).backgroundColor : 'null',
+        '| sample:', html.replace(/\s+/g, ' ').slice(0, 160),
+      );
     } catch (e) {
-      return { diagErr: String(e) };
+      console.log('[sync] ' + tag + ' diagErr', String(e));
     }
   }
 
@@ -1188,7 +1196,7 @@ function showScreenModal(deviceId: string): void {
       offset = curTotal;
       try { replayer!.pause(offset); } catch (e) { pauseErr = e; console.warn('[sync] pause threw', String((e as any)?.message || e)); }
     }
-    console.log('[sync] feed done', { added: i - from, addErrors, total: curTotal, pauseErr: pauseErr ? String(pauseErr) : null, ...viewDiag() });
+    logView('feed done', { added: i - from, addErrors, total: curTotal, pauseErr: pauseErr ? String(pauseErr) : null });
     syncTransport();
   }
 
@@ -1232,7 +1240,7 @@ function showScreenModal(deviceId: string): void {
     offset = curTotal; // newest window starts at its latest frame
     replayer.pause(offset);
     fitScale(data.width, data.height);
-    console.log('[sync] build ok', { total: curTotal, ...viewDiag() });
+    logView('build ok', { total: curTotal });
     syncTransport();
     return true;
   }
