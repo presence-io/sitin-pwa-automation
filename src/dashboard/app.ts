@@ -1123,37 +1123,38 @@ function showScreenModal(deviceId: string): void {
     return events;
   }
 
-  async function renderRrweb(data: any): Promise<void> {
-    if (!Array.isArray(data.events) || data.events.length === 0) return;
-    // Nothing new — skip.
-    if (data.bufferId === curBufferId && data.events.length === curCount) return;
+  // Apply only the newly-arrived events to the existing Replayer, in small
+  // chunks that yield to the browser between batches. A heavy interaction can
+  // emit hundreds of mutations in one 1s flush; feeding them all synchronously
+  // blocks the main thread long enough that the tab is killed ("page crash").
+  // Yielding keeps the tab responsive — it may lag, but it never freezes.
+  const FEED_CHUNK = 60;
+  const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
 
-    const rrweb = await loadRrweb(); // lazy: only fetched when a screen is opened
-    if (stageEl.isConnected === false) return; // modal closed while loading
-
-    // Same window grew: feed only the new events into the existing Replayer.
-    // Rebuilding from scratch re-creates every sandboxed iframe each second,
-    // which freezes/crashes the tab on iframe-heavy pages — so never rebuild
-    // unless the window actually changed (new checkout / new viewer).
-    if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
-      const startTime = replayer.getMetaData().startTime;
-      for (let i = curCount; i < data.events.length; i++) {
-        try { replayer.addEvent(data.events[i]); } catch {}
+  async function feedIncremental(data: any): Promise<void> {
+    const startTime = replayer!.getMetaData().startTime;
+    let i = curCount;
+    while (i < data.events.length) {
+      const end = Math.min(i + FEED_CHUNK, data.events.length);
+      for (; i < end; i++) {
+        try { replayer!.addEvent(data.events[i]); } catch {}
         const o = data.events[i].timestamp - startTime;
         if (o >= 0) curOffsets.push(o);
       }
-      curCount = data.events.length;
-      curTotal = Math.max(curTotal, replayer.getMetaData().totalTime); // re-read after add
-      if (live) { offset = curTotal; replayer.pause(offset); } // follow latest frame
-      syncTransport();
-      return;
+      curCount = i;
+      if (i < data.events.length) await nextFrame(); // let the browser breathe
     }
+    curTotal = Math.max(curTotal, replayer!.getMetaData().totalTime);
+    if (live) { offset = curTotal; replayer!.pause(offset); } // follow latest frame
+    syncTransport();
+  }
 
-    // New window (or first frame): build a fresh Replayer. Build into a holder
-    // appended alongside the current view and only swap it in once construction
-    // succeeds — so if the Replayer throws, the previous frame stays on screen
-    // instead of leaving the stage blank. (Don't build detached and move it:
-    // re-parenting the replay iframe reloads it and wipes the rendered content.)
+  function buildFresh(rrweb: any, data: any): boolean {
+    // Build a fresh Replayer into a holder appended alongside the current view and
+    // only swap it in once construction succeeds — so if the Replayer throws, the
+    // previous frame stays on screen instead of leaving the stage blank. (Don't
+    // build detached and move it: re-parenting the replay iframe reloads it and
+    // wipes the rendered content.)
     imgEl.style.display = 'none';
     stageEl.style.display = 'block';
     const holder = document.createElement('div');
@@ -1161,16 +1162,12 @@ function showScreenModal(deviceId: string): void {
     let next: import('rrweb').Replayer;
     try {
       next = new rrweb.Replayer(data.events, {
-        root: holder,
-        liveMode: false,
-        mouseTail: false,
-        showWarning: false,
-        showDebug: false,
+        root: holder, liveMode: false, mouseTail: false, showWarning: false, showDebug: false,
       });
     } catch (e) {
       holder.remove();
       if (!replayer) infoEl.textContent = '该页面无法回放（可能内嵌了跨域 iframe）';
-      return; // keep the last good frame
+      return false; // keep the last good frame
     }
     if (replayer) { try { replayer.destroy(); } catch {} }
     for (const child of Array.from(stageEl.children)) {
@@ -1191,6 +1188,36 @@ function showScreenModal(deviceId: string): void {
     replayer.pause(offset);
     fitScale(data.width, data.height);
     syncTransport();
+    return true;
+  }
+
+  // Coalescing render pump: callers just update latestData and call requestRender().
+  // Only one pump runs at a time; while it yields, newer frames overwrite latestData
+  // and the pump keeps catching up to the newest state — so a backlog of frames
+  // collapses into the latest render instead of stacking up and overwhelming the tab.
+  let renderBusy = false;
+  function requestRender(): void {
+    if (renderBusy) return; // a pump is already running; it will pick up latestData
+    renderBusy = true;
+    pumpRender().catch(() => {}).finally(() => { renderBusy = false; });
+  }
+
+  async function pumpRender(): Promise<void> {
+    const rrweb = await loadRrweb(); // lazy: only fetched when a screen is opened
+    while (live && latestData && stageEl.isConnected) {
+      const data = latestData;
+      if (!Array.isArray(data.events) || data.events.length === 0) return;
+      // Already up to date with this frame.
+      if (data.bufferId === curBufferId && data.events.length === curCount) return;
+      // Same window grew → feed only the new events (chunked, yielding).
+      if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
+        await feedIncremental(data);
+      } else {
+        // New window (or first frame) → one full rebuild.
+        if (!buildFresh(rrweb, data)) return;
+      }
+      // latestData may have advanced while we worked — loop again to catch up.
+    }
   }
 
   function renderLegacyImage(data: any): void {
@@ -1208,7 +1235,7 @@ function showScreenModal(deviceId: string): void {
   liveBtn.addEventListener('click', () => {
     live = true;
     if (playing) pausePlayback();
-    if (latestData) renderRrweb(latestData).catch(() => {});
+    if (latestData) requestRender();
     syncTransport();
   });
 
@@ -1226,7 +1253,7 @@ function showScreenModal(deviceId: string): void {
   function applyFrame(data: any): void {
     data.kind = 'rrweb'; // events inside the frame are already a parsed array
     latestData = data;
-    if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
+    if (live) requestRender();
     const parts = [`${data.width}×${data.height}`, data.url || ''];
     if (data.title) parts.push(data.title);
     parts.push(new Date(data.timestamp).toLocaleTimeString());
@@ -1251,7 +1278,7 @@ function showScreenModal(deviceId: string): void {
         if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
         latestData = data;
         // While the user is stepping a frozen window, don't yank the view.
-        if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
+        if (live) requestRender();
       } else if (data.image) {
         renderLegacyImage(data);
       }
