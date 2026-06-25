@@ -7,15 +7,26 @@
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-    // For cross-network / mobile (symmetric NAT) connectivity, add a TURN
-    // server here, e.g.:
-    // { urls: 'turn:turn.example.com:3478', username: 'user', credential: 'pass' },
+    // TURN relay — required when the two peers are on different networks and at
+    // least one sits behind a symmetric NAT (mobile carriers / corporate Wi-Fi),
+    // where pure STUN hole-punching fails. These are the free Open Relay Project
+    // endpoints; for production reliability replace with your own coturn / a paid
+    // TURN account (e.g. metered.ca with an API key).
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
 };
 
 // Resolve once ICE gathering completes (or after a timeout) so localDescription
 // already carries every candidate — lets us skip trickle-ICE signaling.
-export function waitIceComplete(pc: RTCPeerConnection, timeoutMs = 3000): Promise<void> {
+export function waitIceComplete(pc: RTCPeerConnection, timeoutMs = 5000): Promise<void> {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise((resolve) => {
     let done = false;

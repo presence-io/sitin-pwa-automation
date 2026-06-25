@@ -1240,8 +1240,10 @@ function showScreenModal(deviceId: string): void {
     } catch { startRtdbFallback(); }
   }
   startWebRtc();
-  // Arm the database fallback only if the peer hasn't connected in time.
-  fallbackTimer = setTimeout(() => { if (!rtcConnected) startRtdbFallback(); }, 8000);
+  // Arm the database fallback only if the peer hasn't connected in time. Allow
+  // enough time for the non-trickle TURN handshake (offer+answer ICE gather,
+  // then relay connectivity) before falling back to the DB.
+  fallbackTimer = setTimeout(() => { if (!rtcConnected) startRtdbFallback(); }, 14000);
 
   const cleanup = () => {
     if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
