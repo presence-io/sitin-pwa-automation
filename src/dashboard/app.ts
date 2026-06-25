@@ -938,6 +938,16 @@ function showScreenModal(deviceId: string): void {
             </div>
             <div id="storage-list" style="height:240px;overflow:auto;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
           </div>
+
+          <div style="border:1px solid #d0d7de;border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:12px;font-weight:600;color:#1f2328">🌐 Network</span>
+              <input id="nw-search" placeholder="搜索 URL/方法…" style="flex:1;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px 8px;font-size:11px" />
+              <span id="nw-count" style="font-size:11px;color:#59636e;white-space:nowrap"></span>
+              <button id="nw-clear" title="清空显示" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
+            </div>
+            <div id="network-list" style="height:240px;overflow:auto;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1067,6 +1077,72 @@ function showScreenModal(deviceId: string): void {
     try { storeData.session = JSON.parse(data.session || '[]'); } catch { storeData.session = []; }
     storeData.origin = data.origin || '';
     renderStorage();
+  });
+
+  // ── Network viewer (mirrors logs): fetch/XHR metadata pushed to
+  // network/{deviceId} by the agent as {entries, seq}. ──
+  const networkListEl = document.getElementById('network-list') as HTMLElement;
+  const nwSearchEl = document.getElementById('nw-search') as HTMLInputElement;
+  const nwCountEl = document.getElementById('nw-count') as HTMLElement;
+  const nwClearEl = document.getElementById('nw-clear') as HTMLButtonElement;
+
+  let netEntries: Array<{
+    id: number; type: string; method: string; url: string;
+    status: number; ok: boolean; ts: number; durMs: number; size: number; err: string;
+  }> = [];
+  let netSeq = -1;
+
+  function statusColor(e: { status: number; ok: boolean; err: string }): string {
+    if (e.err) return '#cf222e';
+    if (e.status >= 500) return '#cf222e';
+    if (e.status >= 400) return '#bc4c00';
+    if (e.status >= 300) return '#59636e';
+    if (e.status >= 200) return '#1a7f37';
+    return '#59636e';
+  }
+
+  function fmtSize(n: number): string {
+    if (!n) return '';
+    if (n < 1024) return n + 'B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'K';
+    return (n / 1024 / 1024).toFixed(1) + 'M';
+  }
+
+  function renderNetwork(): void {
+    const q = nwSearchEl.value.trim().toLowerCase();
+    let shown = 0;
+    const html: string[] = [];
+    for (let i = netEntries.length - 1; i >= 0; i--) {
+      const e = netEntries[i];
+      if (q && !e.url.toLowerCase().includes(q) && !e.method.toLowerCase().includes(q)) continue;
+      shown++;
+      const color = statusColor(e);
+      const statusTxt = e.err ? '✕' : (e.status || '…');
+      const time = new Date(e.ts).toLocaleTimeString();
+      const size = fmtSize(e.size);
+      html.push(
+        `<div style="padding:3px 0;border-bottom:1px solid #eaeef2;white-space:pre-wrap;word-break:break-all">` +
+        `<span style="color:#0550ae;font-weight:600">${escHtml(e.method)}</span> ` +
+        `<span style="color:${color};font-weight:600">${escHtml(String(statusTxt))}</span> ` +
+        `<span style="color:#1f2328">${highlight(e.url, q)}</span>` +
+        `<span style="color:#59636e"> · ${e.durMs}ms${size ? ' · ' + size : ''} · ${escHtml(time)}${e.err ? ' · ' + escHtml(e.err) : ''}</span>` +
+        `</div>`,
+      );
+    }
+    networkListEl.innerHTML = html.join('') || '<div style="color:#59636e">暂无数据</div>';
+    nwCountEl.textContent = q ? `${shown}/${netEntries.length}` : `${netEntries.length}`;
+  }
+
+  nwSearchEl.addEventListener('input', renderNetwork);
+  nwClearEl.addEventListener('click', () => { netEntries = []; renderNetwork(); });
+
+  const networkSource = fbListen(`network/${deviceId}`, async () => {
+    const data = await fbGet<any>(`network/${deviceId}`);
+    if (!data || typeof data.seq !== 'number') return;
+    if (data.seq === netSeq) return;
+    netSeq = data.seq;
+    netEntries = Array.isArray(data.entries) ? data.entries : [];
+    renderNetwork();
   });
 
   let replayer: import('rrweb').Replayer | null = null;
@@ -1548,6 +1624,7 @@ function showScreenModal(deviceId: string): void {
     if (fallbackSource) { fallbackSource.close(); fallbackSource = null; }
     logSource.close();
     storageSource.close();
+    networkSource.close();
     window.removeEventListener('resize', onResizeFit);
     if (answerSource) answerSource.close();
     if (rtcPc) { try { rtcPc.close(); } catch {} rtcPc = null; }

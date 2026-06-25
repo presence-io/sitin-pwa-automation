@@ -5,6 +5,7 @@ import { getRtcConfig, waitIceComplete, sendChunked } from '../shared/webrtc';
 import { getDeviceId } from './remote';
 import { startLogStream, stopLogStream } from './logsync';
 import { startStorageStream, stopStorageStream } from './storagesync';
+import { startNetworkStream, stopNetworkStream } from './networksync';
 
 let stopRecordFn: (() => void) | null = null;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -240,9 +241,11 @@ export function listenSyncControl(): void {
       if (data?.screenSync || data?.logSync) {
         startLogStream(data.fps || 1);
         startStorageStream(data.fps || 1);
+        startNetworkStream(data.fps || 1);
       } else {
         stopLogStream();
         stopStorageStream();
+        stopNetworkStream();
       }
       if (data?.screenSync) {
         startRtdbSync(data.fps || 1);
@@ -261,6 +264,7 @@ export function cleanupSync(): void {
   maybeStopRecording();
   stopLogStream();
   stopStorageStream();
+  stopNetworkStream();
   if (syncSource) { syncSource.close(); syncSource = null; }
   if (rtcSource) { rtcSource.close(); rtcSource = null; }
 }
