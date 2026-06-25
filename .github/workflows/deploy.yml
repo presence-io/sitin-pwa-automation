@@ -38,6 +38,8 @@ jobs:
 
       - run: cp src/dashboard/index.html dist/dashboard.html
 
+      - run: cp node_modules/rrweb/dist/rrweb.umd.min.cjs dist/rrweb.umd.min.cjs
+
       - run: cp -r tests dist/tests
 
       - uses: actions/configure-pages@v5

@@ -129,6 +129,7 @@ function renderDevices(): void {
         <div class="meta">${d.project ? esc(d.project) : 'no project'} · ${esc(ua)}${ago}</div>
       </div>
       ${d.status === 'online' ? `<button class="preview-btn btn-screen" data-device="${esc(d.deviceId)}" title="View screen">👁</button>` : ''}
+      <button class="preview-btn btn-del-device" data-device="${esc(d.deviceId)}" title="Delete device" style="color:#cf222e">🗑</button>
     </div>`;
   }).join('');
 
@@ -144,10 +145,39 @@ function renderDevices(): void {
 
   el.querySelectorAll('.btn-screen').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const deviceId = (e.target as HTMLElement).dataset.device!;
+      const deviceId = (e.currentTarget as HTMLElement).dataset.device!;
       showScreenModal(deviceId);
     });
   });
+
+  el.querySelectorAll('.btn-del-device').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const deviceId = (e.currentTarget as HTMLElement).dataset.device!;
+      deleteDevice(deviceId);
+    });
+  });
+}
+
+// Remove a device from the registry along with its realtime screen/log data.
+// Note: an online device whose agent is still running will re-register on its
+// next heartbeat — delete is mainly for clearing stale/offline entries.
+async function deleteDevice(deviceId: string): Promise<void> {
+  if (!confirm(`删除设备 "${deviceId}"？\n将从列表移除该设备及其屏幕同步、日志数据。`)) return;
+
+  const viewer = state.screenViewers.get(deviceId);
+  if (viewer) { viewer.close(); state.screenViewers.delete(deviceId); }
+
+  state.selectedDevices.delete(deviceId);
+  state.devices = state.devices.filter(d => d.deviceId !== deviceId);
+  renderDevices();
+  updateRunButton();
+
+  await Promise.all([
+    fbDelete(`devices/${deviceId}`),
+    fbDelete(`screens/${deviceId}`),
+    fbDelete(`logs/${deviceId}`),
+    fbDelete(`syncControl/${deviceId}`),
+  ]);
 }
 
 // ── Suites ──
