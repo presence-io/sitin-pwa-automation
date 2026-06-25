@@ -3,6 +3,7 @@ import {
   type DeviceInfo, type RemoteCommand, type CommandProgress,
 } from '../shared/firebase';
 import { loadRrweb } from '../shared/rrweb-loader';
+import { RTC_CONFIG, waitIceComplete, Reassembler } from '../shared/webrtc';
 
 // Minimal rrweb replay styles (the base Replayer renders into an iframe; these
 // only cover the wrapper + cursor so we don't need the full rrweb stylesheet).
@@ -1146,6 +1147,51 @@ function showScreenModal(deviceId: string): void {
     syncTransport();
   });
 
+  // ── WebRTC peer path: screen frames arrive directly over a DataChannel, so
+  // the heavy payload never goes through the database. Falls back to the RTDB
+  // SSE listener below if the peer connection can't be established. ──
+  const reasm = new Reassembler();
+  let rtcPc: RTCPeerConnection | null = null;
+  let answerSource: EventSource | null = null;
+
+  function applyFrame(data: any): void {
+    data.kind = 'rrweb'; // events inside the frame are already a parsed array
+    latestData = data;
+    if (live) renderRrweb(data).catch(() => { infoEl.textContent = 'rrweb 加载失败（可能被 CSP 拦截）'; });
+    const parts = [`${data.width}×${data.height}`, data.url || ''];
+    if (data.title) parts.push(data.title);
+    parts.push(new Date(data.timestamp).toLocaleTimeString());
+    infoEl.textContent = parts.join(' · ');
+  }
+
+  async function startWebRtc(): Promise<void> {
+    try {
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      rtcPc = pc;
+      const session = Math.random().toString(36).slice(2);
+      const ch = pc.createDataChannel('screen');
+      ch.onmessage = (ev) => {
+        let msg: any;
+        try { msg = JSON.parse(ev.data); } catch { return; }
+        const done = reasm.push(msg);
+        if (!done || done.kind !== 'window') return;
+        let frame: any;
+        try { frame = JSON.parse(done.payload); } catch { return; }
+        applyFrame(frame);
+      };
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await waitIceComplete(pc);
+      await fbPut(`rtc/${deviceId}/offer`, { sdp: pc.localDescription!.sdp, type: 'offer', session });
+      answerSource = fbListen(`rtc/${deviceId}/answer`, async () => {
+        const ans = await fbGet<any>(`rtc/${deviceId}/answer`);
+        if (!ans || ans.session !== session || pc.currentRemoteDescription) return;
+        try { await pc.setRemoteDescription({ type: 'answer', sdp: ans.sdp }); } catch {}
+      });
+    } catch { /* RTDB SSE path remains as fallback */ }
+  }
+  startWebRtc();
+
   // SSE listen for screen updates
   const source = fbListen(`screens/${deviceId}`, async () => {
     const data = await fbGet<any>(`screens/${deviceId}`);
@@ -1178,6 +1224,10 @@ function showScreenModal(deviceId: string): void {
   const cleanup = () => {
     source.close();
     logSource.close();
+    if (answerSource) answerSource.close();
+    if (rtcPc) { try { rtcPc.close(); } catch {} rtcPc = null; }
+    fbDelete(`rtc/${deviceId}/offer`);
+    fbDelete(`rtc/${deviceId}/answer`);
     stopRaf();
     if (replayer) { try { replayer.destroy(); } catch {} replayer = null; }
     state.screenViewers.delete(deviceId);
