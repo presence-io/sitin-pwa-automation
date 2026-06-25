@@ -1320,6 +1320,22 @@ function showScreenModal(deviceId: string): void {
       .sort((a: number, b: number) => a - b);
     offset = curTotal; // newest window starts at its latest frame
     replayer.pause(offset);
+    // rrweb sizes its iframe from the recording's Meta event (type 4). The
+    // agent's re-checkout windows often omit Meta, so on every rebuild rrweb
+    // leaves the iframe at 0x0 → blank stage despite a fully built DOM. Force
+    // the iframe (and its wrapper) to the recorded viewport ourselves.
+    const builtIfr = replayer.iframe;
+    if (builtIfr) {
+      builtIfr.width = String(data.width);
+      builtIfr.height = String(data.height);
+      builtIfr.style.width = data.width + 'px';
+      builtIfr.style.height = data.height + 'px';
+    }
+    const builtWrap = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
+    if (builtWrap) {
+      builtWrap.style.width = data.width + 'px';
+      builtWrap.style.height = data.height + 'px';
+    }
     fitScale(data.width, data.height);
     logView('build ok', { total: curTotal });
     syncTransport();
