@@ -38,6 +38,10 @@ jobs:
 
       - run: cp src/dashboard/index.html dist/dashboard.html
 
+      # Cache-bust dashboard.js with the commit SHA so a reload never serves a
+      # stale bundle (GitHub Pages otherwise caches assets for ~10 min).
+      - run: sed -i "s|src=\"dashboard.js\"|src=\"dashboard.js?v=${GITHUB_SHA}\"|" dist/dashboard.html
+
       - run: cp node_modules/rrweb/dist/rrweb.umd.min.cjs dist/rrweb.umd.min.cjs
 
       - run: cp -r tests dist/tests
