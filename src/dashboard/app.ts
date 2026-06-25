@@ -3,7 +3,7 @@ import {
   type DeviceInfo, type RemoteCommand, type CommandProgress,
 } from '../shared/firebase';
 import { loadRrweb } from '../shared/rrweb-loader';
-import { RTC_CONFIG, waitIceComplete, Reassembler } from '../shared/webrtc';
+import { getRtcConfig, waitIceComplete, Reassembler } from '../shared/webrtc';
 
 // Minimal rrweb replay styles (the base Replayer renders into an iframe; these
 // only cover the wrapper + cursor so we don't need the full rrweb stylesheet).
@@ -1306,7 +1306,7 @@ function showScreenModal(deviceId: string): void {
 
   async function startWebRtc(): Promise<void> {
     try {
-      const pc = new RTCPeerConnection(RTC_CONFIG);
+      const pc = new RTCPeerConnection(await getRtcConfig());
       rtcPc = pc;
       const session = Math.random().toString(36).slice(2);
       const ch = pc.createDataChannel('screen');

@@ -1,7 +1,7 @@
 import { log, warn } from '../core/helpers';
 import { loadRrweb } from '../shared/rrweb-loader';
 import { fbPut, fbGet, fbDelete, fbListen } from '../shared/firebase';
-import { RTC_CONFIG, waitIceComplete, sendChunked } from '../shared/webrtc';
+import { getRtcConfig, waitIceComplete, sendChunked } from '../shared/webrtc';
 import { getDeviceId } from './remote';
 import { startLogStream, stopLogStream } from './logsync';
 
@@ -166,7 +166,7 @@ function closeRtc(): void {
 async function answerOffer(offer: any): Promise<void> {
   closeRtc(); // drop any previous peer before starting a new handshake
   const deviceId = getDeviceId();
-  const pc = new RTCPeerConnection(RTC_CONFIG);
+  const pc = new RTCPeerConnection(await getRtcConfig());
   rtcPc = pc;
 
   pc.ondatachannel = (ev) => {

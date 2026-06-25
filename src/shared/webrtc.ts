@@ -4,25 +4,53 @@
 // into the SDP once gathering finishes), so signaling is just two small writes
 // — no separate ICE-candidate exchange.
 
+// Metered.ca TURN account. Credentials are fetched fresh at runtime from the
+// REST API (they rotate), so we keep a static snapshot only as an offline
+// fallback. TURN relay is required when the two peers are on different networks
+// and at least one sits behind a symmetric NAT (mobile carriers / corporate
+// Wi-Fi), where pure STUN hole-punching fails.
+const METERED_CREDS_URL =
+  'https://cjkun.metered.live/api/v1/turn/credentials?apiKey=2702de8e9c9ec3f56dfe56ca068bb711ed5b';
+
+const STUN_SERVERS: RTCIceServer = {
+  urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+};
+
+// Static fallback used if the credential fetch fails (e.g. offline at startup).
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-    // TURN relay — required when the two peers are on different networks and at
-    // least one sits behind a symmetric NAT (mobile carriers / corporate Wi-Fi),
-    // where pure STUN hole-punching fails. These are the free Open Relay Project
-    // endpoints; for production reliability replace with your own coturn / a paid
-    // TURN account (e.g. metered.ca with an API key).
+    STUN_SERVERS,
     {
       urls: [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turn:global.relay.metered.ca:80',
+        'turn:global.relay.metered.ca:80?transport=tcp',
+        'turn:global.relay.metered.ca:443',
+        'turns:global.relay.metered.ca:443?transport=tcp',
       ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      username: '60c4b4e1553eb47e4bdfc6f5',
+      credential: 'QAURAFrU2xuVcqCD',
     },
   ],
 };
+
+let cachedConfig: RTCConfiguration | null = null;
+
+// Fetch fresh TURN credentials from Metered. Cached for the session; falls back
+// to the static RTC_CONFIG on any failure so a network hiccup never blocks the
+// handshake.
+export async function getRtcConfig(): Promise<RTCConfiguration> {
+  if (cachedConfig) return cachedConfig;
+  try {
+    const res = await fetch(METERED_CREDS_URL);
+    if (!res.ok) throw new Error(`metered ${res.status}`);
+    const iceServers = (await res.json()) as RTCIceServer[];
+    if (!Array.isArray(iceServers) || iceServers.length === 0) throw new Error('empty');
+    cachedConfig = { iceServers: [STUN_SERVERS, ...iceServers] };
+  } catch {
+    cachedConfig = RTC_CONFIG;
+  }
+  return cachedConfig;
+}
 
 // Resolve once ICE gathering completes (or after a timeout) so localDescription
 // already carries every candidate — lets us skip trickle-ICE signaling.
