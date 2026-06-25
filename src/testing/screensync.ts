@@ -4,6 +4,7 @@ import { fbPut, fbGet, fbDelete, fbListen } from '../shared/firebase';
 import { getRtcConfig, waitIceComplete, sendChunked } from '../shared/webrtc';
 import { getDeviceId } from './remote';
 import { startLogStream, stopLogStream } from './logsync';
+import { startStorageStream, stopStorageStream } from './storagesync';
 
 let stopRecordFn: (() => void) | null = null;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -234,11 +235,14 @@ export function listenSyncControl(): void {
   syncSource = fbListen(`syncControl/${deviceId}`, async () => {
     try {
       const data = await fbGet<any>(`syncControl/${deviceId}`);
-      // Logs stream whenever a viewer is attached (screen sync or logs alone).
+      // Logs + storage stream whenever a viewer is attached (screen sync or
+      // logs alone).
       if (data?.screenSync || data?.logSync) {
         startLogStream(data.fps || 1);
+        startStorageStream(data.fps || 1);
       } else {
         stopLogStream();
+        stopStorageStream();
       }
       if (data?.screenSync) {
         startRtdbSync(data.fps || 1);
@@ -256,6 +260,7 @@ export function cleanupSync(): void {
   fbDelete(`screens/${deviceId}`);
   maybeStopRecording();
   stopLogStream();
+  stopStorageStream();
   if (syncSource) { syncSource.close(); syncSource = null; }
   if (rtcSource) { rtcSource.close(); rtcSource = null; }
 }

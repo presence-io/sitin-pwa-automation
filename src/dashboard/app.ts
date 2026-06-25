@@ -886,42 +886,58 @@ function showScreenModal(deviceId: string): void {
 
   const container = document.getElementById('modal-container')!;
   container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
-    <div class="modal" style="max-width:440px">
+    <div class="modal" style="max-width:1180px;width:96%">
       <div class="modal-hdr">
         <h3>📱 ${esc(deviceId)}</h3>
         <button class="close" id="modal-close">✕</button>
       </div>
-      <div class="modal-body" style="padding:10px">
-        <div id="screen-info" style="font-size:11px;color:#59636e;margin-bottom:8px;white-space:pre-wrap">Connecting...</div>
-        <div id="screen-stage" style="border:1px solid #d0d7de;border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
-        <img id="screen-img" style="display:none;max-width:100%;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa" />
+      <div class="modal-body" style="padding:12px;display:flex;gap:14px;align-items:flex-start">
 
-        <div id="pb-bar" style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11px;color:#59636e">
-          <button id="pb-start" title="跳到开头" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏮</button>
-          <button id="pb-prev" title="上一帧（单步后退）" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏪</button>
-          <button id="pb-play" title="播放 / 暂停" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 9px;cursor:pointer">▶</button>
-          <button id="pb-next" title="下一帧（单步前进）" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏩</button>
-          <input id="pb-seek" type="range" min="0" max="0" value="0" step="1" style="flex:1;cursor:pointer" />
-          <span id="pb-time" style="white-space:nowrap;font-variant-numeric:tabular-nums">0.0 / 0.0s</span>
-          <button id="pb-live" title="跟随最新画面" style="background:#0969da;border:1px solid #0969da;border-radius:5px;color:#fff;font-size:11px;padding:3px 8px;cursor:pointer">跟随</button>
+        <div style="flex:0 0 auto;display:flex;flex-direction:column;min-width:280px">
+          <div id="screen-info" style="font-size:11px;color:#59636e;margin-bottom:8px;white-space:pre-wrap">Connecting...</div>
+          <div id="screen-stage" style="border:1px solid #d0d7de;border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
+          <img id="screen-img" style="display:none;max-width:100%;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa" />
+
+          <div id="pb-bar" style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11px;color:#59636e">
+            <button id="pb-start" title="跳到开头" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏮</button>
+            <button id="pb-prev" title="上一帧（单步后退）" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏪</button>
+            <button id="pb-play" title="播放 / 暂停" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 9px;cursor:pointer">▶</button>
+            <button id="pb-next" title="下一帧（单步前进）" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:5px;color:#1f2328;font-size:12px;padding:3px 7px;cursor:pointer">⏩</button>
+            <input id="pb-seek" type="range" min="0" max="0" value="0" step="1" style="flex:1;cursor:pointer" />
+            <span id="pb-time" style="white-space:nowrap;font-variant-numeric:tabular-nums">0.0 / 0.0s</span>
+            <button id="pb-live" title="跟随最新画面" style="background:#0969da;border:1px solid #0969da;border-radius:5px;color:#fff;font-size:11px;padding:3px 8px;cursor:pointer">跟随</button>
+          </div>
         </div>
 
-        <div style="margin-top:12px;border-top:1px solid #d0d7de;padding-top:10px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span style="font-size:12px;font-weight:600;color:#1f2328">🖥 Console</span>
-            <input id="log-search" placeholder="搜索日志…" style="flex:1;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px 8px;font-size:11px" />
-            <label style="font-size:11px;color:#59636e;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="log-filter" style="cursor:pointer" />仅匹配</label>
-            <select id="log-level" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px;font-size:11px">
-              <option value="">全部</option>
-              <option value="error">error</option>
-              <option value="warn">warn</option>
-              <option value="info">info</option>
-              <option value="log">log</option>
-            </select>
-            <span id="log-count" style="font-size:11px;color:#59636e;white-space:nowrap"></span>
-            <button id="log-clear" title="清空显示" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
+        <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:12px">
+          <div style="border:1px solid #d0d7de;border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:12px;font-weight:600;color:#1f2328">🖥 Console</span>
+              <input id="log-search" placeholder="搜索日志…" style="flex:1;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px 8px;font-size:11px" />
+              <label style="font-size:11px;color:#59636e;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="log-filter" style="cursor:pointer" />仅匹配</label>
+              <select id="log-level" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px;font-size:11px">
+                <option value="">全部</option>
+                <option value="error">error</option>
+                <option value="warn">warn</option>
+                <option value="info">info</option>
+                <option value="log">log</option>
+              </select>
+              <span id="log-count" style="font-size:11px;color:#59636e;white-space:nowrap"></span>
+              <button id="log-clear" title="清空显示" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
+            </div>
+            <div id="log-list" style="height:280px;overflow:auto;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
           </div>
-          <div id="log-list" style="height:200px;overflow:auto;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+
+          <div style="border:1px solid #d0d7de;border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:12px;font-weight:600;color:#1f2328">🗄 Storage</span>
+              <button id="st-tab-local" style="background:#0969da;border:1px solid #0969da;border-radius:6px;color:#fff;font-size:11px;padding:4px 10px;cursor:pointer">localStorage</button>
+              <button id="st-tab-session" style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:11px;padding:4px 10px;cursor:pointer">sessionStorage</button>
+              <input id="st-search" placeholder="搜索键/值…" style="flex:1;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:4px 8px;font-size:11px" />
+              <span id="st-count" style="font-size:11px;color:#59636e;white-space:nowrap"></span>
+            </div>
+            <div id="storage-list" style="height:240px;overflow:auto;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -999,6 +1015,60 @@ function showScreenModal(deviceId: string): void {
     renderLogs();
   });
 
+  // ── Storage viewer (mirrors logs): local/session pushed to storage/{deviceId}
+  // by the agent as JSON-encoded [key,value][] strings. ──
+  const storageListEl = document.getElementById('storage-list') as HTMLElement;
+  const stSearchEl = document.getElementById('st-search') as HTMLInputElement;
+  const stCountEl = document.getElementById('st-count') as HTMLElement;
+  const stTabLocal = document.getElementById('st-tab-local') as HTMLButtonElement;
+  const stTabSession = document.getElementById('st-tab-session') as HTMLButtonElement;
+  let storeTab: 'local' | 'session' = 'local';
+  let storeData: { local: Array<[string, string]>; session: Array<[string, string]>; origin: string } = {
+    local: [], session: [], origin: '',
+  };
+
+  function renderStorage(): void {
+    const rows = storeTab === 'local' ? storeData.local : storeData.session;
+    const q = stSearchEl.value.trim().toLowerCase();
+    let shown = 0;
+    const html: string[] = [];
+    for (const [k, v] of rows) {
+      if (q && !k.toLowerCase().includes(q) && !v.toLowerCase().includes(q)) continue;
+      shown++;
+      html.push(
+        `<div style="padding:3px 0;border-bottom:1px solid #eaeef2;white-space:pre-wrap;word-break:break-all">` +
+        `<span style="color:#0550ae;font-weight:600">${highlight(k, q)}</span>` +
+        `<span style="color:#59636e"> = </span>` +
+        `<span style="color:#1f2328">${highlight(v, q)}</span>` +
+        `</div>`,
+      );
+    }
+    storageListEl.innerHTML = html.join('') || '<div style="color:#59636e">暂无数据</div>';
+    stCountEl.textContent = (q ? `${shown}/${rows.length}` : `${rows.length}`) + (storeData.origin ? ` · ${storeData.origin}` : '');
+  }
+
+  function selectTab(tab: 'local' | 'session'): void {
+    storeTab = tab;
+    const on = 'background:#0969da;border:1px solid #0969da;border-radius:6px;color:#fff;font-size:11px;padding:4px 10px;cursor:pointer';
+    const off = 'background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:11px;padding:4px 10px;cursor:pointer';
+    stTabLocal.setAttribute('style', tab === 'local' ? on : off);
+    stTabSession.setAttribute('style', tab === 'session' ? on : off);
+    renderStorage();
+  }
+
+  stTabLocal.addEventListener('click', () => selectTab('local'));
+  stTabSession.addEventListener('click', () => selectTab('session'));
+  stSearchEl.addEventListener('input', renderStorage);
+
+  const storageSource = fbListen(`storage/${deviceId}`, async () => {
+    const data = await fbGet<any>(`storage/${deviceId}`);
+    if (!data) return;
+    try { storeData.local = JSON.parse(data.local || '[]'); } catch { storeData.local = []; }
+    try { storeData.session = JSON.parse(data.session || '[]'); } catch { storeData.session = []; }
+    storeData.origin = data.origin || '';
+    renderStorage();
+  });
+
   let replayer: import('rrweb').Replayer | null = null;
   let curBufferId: number | null = null;
   let curCount = 0;
@@ -1032,15 +1102,26 @@ function showScreenModal(deviceId: string): void {
     liveBtn.style.color = live ? '#fff' : '#1f2328';
   }
 
+  let fitW = 0, fitH = 0;
   function fitScale(w: number, h: number): void {
     const wrapper = stageEl.querySelector('.replayer-wrapper') as HTMLElement | null;
-    if (!wrapper || !w) return;
-    const scale = Math.min(1, stageEl.clientWidth / w);
+    if (!wrapper || !w || !h) return;
+    fitW = w; fitH = h;
+    // Viewport-driven fit (NOT stageEl.clientWidth, which can be 0 before layout
+    // settles → scale 0 → an all-white stage). Phones are tall, so bound by both
+    // a width and a height budget; cap upscale so a small page isn't blown up.
+    const maxW = 520;
+    const maxH = Math.max(360, window.innerHeight * 0.74);
+    const scale = Math.min(maxW / w, maxH / h, 2);
+    if (!(scale > 0)) { requestAnimationFrame(() => fitScale(w, h)); return; }
     wrapper.style.transform = `scale(${scale})`;
     wrapper.style.transformOrigin = 'top left';
+    stageEl.style.width = Math.round(w * scale) + 'px';
     stageEl.style.height = Math.round(h * scale) + 'px';
-    console.log('[sync] fitScale', { stageW: stageEl.clientWidth, recW: w, recH: h, scale });
+    console.log('[sync] fitScale', { recW: w, recH: h, scale: +scale.toFixed(3), maxH: Math.round(maxH) });
   }
+  const onResizeFit = () => { if (fitW) fitScale(fitW, fitH); };
+  window.addEventListener('resize', onResizeFit);
 
   function stopRaf(): void {
     if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
@@ -1429,6 +1510,8 @@ function showScreenModal(deviceId: string): void {
     if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
     if (fallbackSource) { fallbackSource.close(); fallbackSource = null; }
     logSource.close();
+    storageSource.close();
+    window.removeEventListener('resize', onResizeFit);
     if (answerSource) answerSource.close();
     if (rtcPc) { try { rtcPc.close(); } catch {} rtcPc = null; }
     fbDelete(`rtc/${deviceId}/offer`);
