@@ -1228,15 +1228,27 @@ function showScreenModal(deviceId: string): void {
     while (live && latestData && stageEl.isConnected) {
       const data = latestData;
       if (!Array.isArray(data.events) || data.events.length === 0) return;
-      // Already up to date with this frame.
-      if (data.bufferId === curBufferId && data.events.length === curCount) return;
+      // Monotonic guard. bufferId is the agent's checkout timestamp, so it only
+      // ever increases for a live page. The same window can arrive via TWO
+      // transports at once (WebRTC delta stream + RTDB full-snapshot fallback);
+      // without this guard the pump rebuilds *backward* to an older/smaller
+      // window on every interleaved frame, which flashes the stage white.
+      if (replayer && curBufferId !== null) {
+        if (data.bufferId < curBufferId) {
+          console.log('[sync] skip stale window', { src: data._src, drop: data.bufferId, cur: curBufferId });
+          return; // older checkout — ignore entirely
+        }
+        if (data.bufferId === curBufferId && data.events.length <= curCount) {
+          return; // same window, no new (or duplicate/fewer) events — already shown
+        }
+      }
       // Same window grew → feed only the new events (chunked, yielding).
       if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
-        console.log('[sync] pump -> feed', { bufferId: data.bufferId, have: curCount, now: data.events.length });
+        console.log('[sync] pump -> feed', { src: data._src, bufferId: data.bufferId, have: curCount, now: data.events.length });
         await feedIncremental(data);
       } else {
-        console.log('[sync] pump -> build', { reason: !replayer ? 'no-replayer' : data.bufferId !== curBufferId ? 'new-bufferId' : 'shrank', curBufferId, newBufferId: data.bufferId, curCount, now: data.events.length });
-        // New window (or first frame) → one full rebuild.
+        console.log('[sync] pump -> build', { src: data._src, reason: !replayer ? 'no-replayer' : 'new-bufferId', curBufferId, newBufferId: data.bufferId, curCount, now: data.events.length });
+        // New (strictly newer) window or first frame → one full rebuild.
         if (!buildFresh(rrweb, data)) return;
       }
       // latestData may have advanced while we worked — loop again to catch up.
@@ -1275,6 +1287,7 @@ function showScreenModal(deviceId: string): void {
 
   function applyFrame(data: any): void {
     data.kind = 'rrweb'; // events inside the frame are already a parsed array
+    data._src = 'rtc';
     latestData = data;
     if (live) requestRender();
     const parts = [`${data.width}×${data.height}`, data.url || ''];
@@ -1299,6 +1312,7 @@ function showScreenModal(deviceId: string): void {
           try { data.events = JSON.parse(data.events); } catch { return; }
         }
         if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
+        data._src = 'rtdb';
         latestData = data;
         // While the user is stepping a frozen window, don't yank the view.
         if (live) requestRender();
