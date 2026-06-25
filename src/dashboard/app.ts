@@ -1096,14 +1096,33 @@ function showScreenModal(deviceId: string): void {
 
   async function renderRrweb(data: any): Promise<void> {
     if (!Array.isArray(data.events) || data.events.length === 0) return;
-    // Rebuild only when the window changed (new checkout) or events grew.
+    // Nothing new — skip.
     if (data.bufferId === curBufferId && data.events.length === curCount) return;
-    curBufferId = data.bufferId;
-    curCount = data.events.length;
 
     const rrweb = await loadRrweb(); // lazy: only fetched when a screen is opened
     if (stageEl.isConnected === false) return; // modal closed while loading
 
+    // Same window grew: feed only the new events into the existing Replayer.
+    // Rebuilding from scratch re-creates every sandboxed iframe each second,
+    // which freezes/crashes the tab on iframe-heavy pages — so never rebuild
+    // unless the window actually changed (new checkout / new viewer).
+    if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
+      const meta = replayer.getMetaData();
+      for (let i = curCount; i < data.events.length; i++) {
+        try { replayer.addEvent(data.events[i]); } catch {}
+        const o = data.events[i].timestamp - meta.startTime;
+        if (o >= 0) curOffsets.push(o);
+      }
+      curCount = data.events.length;
+      curTotal = Math.max(curTotal, meta.totalTime);
+      if (live) { offset = curTotal; replayer.pause(offset); } // follow latest frame
+      syncTransport();
+      return;
+    }
+
+    // New window (or first frame): build a fresh Replayer once.
+    curBufferId = data.bufferId;
+    curCount = data.events.length;
     imgEl.style.display = 'none';
     stageEl.style.display = 'block';
     stageEl.innerHTML = '';
