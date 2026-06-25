@@ -1133,19 +1133,34 @@ function showScreenModal(deviceId: string): void {
 
   async function feedIncremental(data: any): Promise<void> {
     const startTime = replayer!.getMetaData().startTime;
+    const from = curCount;
     let i = curCount;
+    let addErrors = 0;
+    let firstErr: any = null;
+    console.log('[sync] feed start', { from, to: data.events.length, bufferId: data.bufferId });
     while (i < data.events.length) {
       const end = Math.min(i + FEED_CHUNK, data.events.length);
       for (; i < end; i++) {
-        try { replayer!.addEvent(data.events[i]); } catch {}
+        try {
+          replayer!.addEvent(data.events[i]);
+        } catch (e) {
+          addErrors++;
+          if (!firstErr) { firstErr = e; console.warn('[sync] addEvent threw', { idx: i, evType: data.events[i]?.type, err: String((e as any)?.message || e) }); }
+        }
         const o = data.events[i].timestamp - startTime;
         if (o >= 0) curOffsets.push(o);
       }
       curCount = i;
       if (i < data.events.length) await nextFrame(); // let the browser breathe
     }
+    let pauseErr: any = null;
     curTotal = Math.max(curTotal, replayer!.getMetaData().totalTime);
-    if (live) { offset = curTotal; replayer!.pause(offset); } // follow latest frame
+    if (live) {
+      offset = curTotal;
+      try { replayer!.pause(offset); } catch (e) { pauseErr = e; console.warn('[sync] pause threw', String((e as any)?.message || e)); }
+    }
+    const iframeEmpty = !replayer!.iframe?.contentDocument?.body?.firstChild;
+    console.log('[sync] feed done', { added: i - from, addErrors, total: curTotal, iframeEmpty, pauseErr: pauseErr ? String(pauseErr) : null });
     syncTransport();
   }
 
@@ -1160,12 +1175,14 @@ function showScreenModal(deviceId: string): void {
     const holder = document.createElement('div');
     stageEl.appendChild(holder);
     let next: import('rrweb').Replayer;
+    console.log('[sync] build start', { events: data.events.length, bufferId: data.bufferId, w: data.width, h: data.height });
     try {
       next = new rrweb.Replayer(data.events, {
         root: holder, liveMode: false, mouseTail: false, showWarning: false, showDebug: false,
       });
     } catch (e) {
       holder.remove();
+      console.error('[sync] build THREW', String((e as any)?.stack || (e as any)?.message || e));
       if (!replayer) infoEl.textContent = '该页面无法回放（可能内嵌了跨域 iframe）';
       return false; // keep the last good frame
     }
@@ -1187,6 +1204,8 @@ function showScreenModal(deviceId: string): void {
     offset = curTotal; // newest window starts at its latest frame
     replayer.pause(offset);
     fitScale(data.width, data.height);
+    const iframeEmpty = !replayer.iframe?.contentDocument?.body?.firstChild;
+    console.log('[sync] build ok', { total: curTotal, iframeEmpty });
     syncTransport();
     return true;
   }
@@ -1199,7 +1218,9 @@ function showScreenModal(deviceId: string): void {
   function requestRender(): void {
     if (renderBusy) return; // a pump is already running; it will pick up latestData
     renderBusy = true;
-    pumpRender().catch(() => {}).finally(() => { renderBusy = false; });
+    pumpRender()
+      .catch((e) => { console.error('[sync] pump THREW', String((e as any)?.stack || (e as any)?.message || e)); })
+      .finally(() => { renderBusy = false; });
   }
 
   async function pumpRender(): Promise<void> {
@@ -1211,8 +1232,10 @@ function showScreenModal(deviceId: string): void {
       if (data.bufferId === curBufferId && data.events.length === curCount) return;
       // Same window grew → feed only the new events (chunked, yielding).
       if (replayer && data.bufferId === curBufferId && data.events.length > curCount) {
+        console.log('[sync] pump -> feed', { bufferId: data.bufferId, have: curCount, now: data.events.length });
         await feedIncremental(data);
       } else {
+        console.log('[sync] pump -> build', { reason: !replayer ? 'no-replayer' : data.bufferId !== curBufferId ? 'new-bufferId' : 'shrank', curBufferId, newBufferId: data.bufferId, curCount, now: data.events.length });
         // New window (or first frame) → one full rebuild.
         if (!buildFresh(rrweb, data)) return;
       }
