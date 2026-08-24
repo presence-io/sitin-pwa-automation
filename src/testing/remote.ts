@@ -54,10 +54,14 @@ async function registerDevice(): Promise<void> {
 async function sendHeartbeat(): Promise<void> {
   const deviceId = getDeviceId();
   try {
+    // Carry identity fields so a heartbeat that runs after the device was deleted
+    // recreates a complete record, not a deviceId-less stub the dashboard chokes on.
     await fbPatch(`devices/${deviceId}`, {
+      deviceId,
       status: 'online',
       lastSeen: Date.now(),
       project: configManager.getProject(),
+      userAgent: navigator.userAgent,
     });
     setConn('online');
   } catch {

@@ -23,7 +23,7 @@ function ensureRrwebCss(): void {
 const TESTS_BASE_URL = 'https://presence-io.github.io/sitin-pwa-automation/tests';
 
 function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ── State ──
@@ -96,7 +96,9 @@ async function refreshDevices(): Promise<void> {
   const data = await fbGet<Record<string, DeviceInfo>>('devices');
   if (!data) { state.devices = []; renderDevices(); return; }
   const cutoff = Date.now() - 90000;
-  const all = Object.values(data);
+  // Skip malformed records (a heartbeat patch after a device delete can recreate
+  // a node with no deviceId); rendering one would crash the whole list.
+  const all = Object.values(data).filter((d): d is DeviceInfo => !!d && !!d.deviceId);
   state.devices = all.map(d => ({
     ...d,
     status: (d.status === 'online' && d.lastSeen > cutoff) ? 'online' : 'offline',
