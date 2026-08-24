@@ -1,9 +1,9 @@
 {
-  "name": "Stage 1 — 注销→注册→提现 $0.50",
+  "name": "新用户完整流程 — 注销→登录→onboarding→提现 $0.50",
   "cases": [
     {
-      "name": "Stage 1 完整流程",
-      "tags": ["stage", "s1"],
+      "name": "新用户完整流程",
+      "tags": ["stage", "newuser"],
       "steps": [
         { "action": "call", "fn": "deleteAccount" },
         { "action": "wait", "delay": 1000 },

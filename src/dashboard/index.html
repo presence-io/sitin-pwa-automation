@@ -1,163 +1,220 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoBot Dashboard</title>
+<title>AutoBot 控制台</title>
 <style>
+:root{
+  --accent:#4f46e5;--accent-strong:#4338ca;--accent-subtle:#eef2ff;--on-accent:#ffffff;
+  --fg:#0f172a;--fg-muted:#64748b;--fg-subtle:#94a3b8;
+  --bg:#eef1f6;--bg-subtle:#f1f5f9;--surface:#ffffff;
+  --border:#e2e8f0;--border-strong:#cbd5e1;--neutral-muted:#eef2f6;
+  --success:#16a34a;--success-subtle:#dcfce7;
+  --danger:#dc2626;--danger-subtle:#fef2f2;
+  --attention-fg:#b45309;--attention-subtle:#fffbeb;--warning-fg:#ea580c;
+  --radius:12px;--radius-sm:8px;--radius-pill:999px;
+  --shadow-sm:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.05);
+  --shadow:0 6px 24px rgba(15,23,42,.09);
+}
 *{margin:0;padding:0;box-sizing:border-box}
 html{color-scheme:light}
-body{background:#f6f8fa;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;min-height:100vh}
-a{color:#0969da;text-decoration:none}
-button{cursor:pointer;font-family:inherit}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+h2{font-size:14px;font-weight:650;color:var(--fg);display:flex;align-items:center;gap:8px}
+svg{display:block;flex-shrink:0}
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#ffffff;border-bottom:1px solid #d0d7de}
-.topbar h1{font-size:18px;font-weight:700;color:#0969da;display:flex;align-items:center;gap:8px}
-.topbar h1 span{font-size:20px}
-.topbar .right{display:flex;align-items:center;gap:12px}
-.topbar select{padding:6px 10px;background:#ffffff;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:13px}
+/* ── 通用组件 ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;border:1px solid transparent;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s;white-space:nowrap;line-height:1.2}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-lg{padding:11px 22px;font-size:14px}
+.btn-primary{background:var(--accent);color:var(--on-accent)}
+.btn-primary:hover{background:var(--accent-strong)}
+.btn-success,.btn-run{background:var(--success);color:#fff;border-color:transparent}
+.btn-success:hover,.btn-run:hover{filter:brightness(.94)}
+.btn-success:disabled,.btn-run:disabled{background:var(--neutral-muted);color:var(--fg-subtle);cursor:not-allowed;filter:none}
+.btn-ghost{background:var(--surface);border-color:var(--border);color:var(--fg)}
+.btn-ghost:hover{background:var(--bg-subtle);border-color:var(--border-strong)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-icon{background:transparent;border-color:transparent;color:var(--fg-muted);padding:5px;width:28px;height:28px}
+.btn-icon:hover{background:var(--neutral-muted);color:var(--fg)}
+.preview-btn{font-size:12px;color:var(--accent);background:none;border:none;padding:2px 6px;cursor:pointer;border-radius:6px;font-family:inherit}
+.preview-btn:hover{background:var(--accent-subtle)}
+.badge{background:var(--neutral-muted);color:var(--fg-muted);font-size:11px;padding:1px 8px;border-radius:var(--radius-pill);font-weight:600;min-width:20px;text-align:center}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:1px 7px;border-radius:var(--radius-pill);letter-spacing:.02em;text-transform:uppercase}
+.chip-cloud{background:var(--accent-subtle);color:var(--accent-strong)}
+.chip-rec{background:var(--attention-subtle);color:var(--attention-fg)}
+.select{padding:6px 30px 6px 10px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--fg);font-size:13px;font-weight:500;appearance:none;cursor:pointer}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.status-dot.passed{background:var(--success)}
+.status-dot.failed{background:var(--danger)}
+.status-dot.running{background:var(--attention-fg)}
 
-.main{max-width:1200px;margin:0 auto;padding:20px 24px}
+/* ── 顶栏 ── */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 22px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:750;color:var(--fg)}
+.brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-sm)}
+.brand-sub{font-weight:500;color:var(--fg-subtle);font-size:13px}
+.topbar-right{display:flex;align-items:center;gap:10px}
 
-.section{background:#ffffff;border:1px solid #d0d7de;border-radius:8px;margin-bottom:16px;overflow:hidden}
-.section-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #d0d7de;cursor:pointer;user-select:none}
-.section-hdr h2{font-size:14px;font-weight:600;color:#1f2328;display:flex;align-items:center;gap:8px}
-.section-hdr .badge{background:#eaeef2;color:#59636e;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
-.section-hdr .actions{display:flex;gap:8px}
-.section-body{padding:12px 16px}
+/* ── 布局 ── */
+.app{max-width:1360px;margin:0 auto;padding:18px 22px;display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+.sidebar{position:sticky;top:80px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 96px);overflow-y:auto}
+.content{display:flex;flex-direction:column;gap:16px;min-width:0}
 
-.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.device-card{background:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:12px;display:flex;align-items:center;gap:10px;transition:border-color .15s}
-.device-card:hover{border-color:#0969da}
-.device-card input[type=checkbox]{width:16px;height:16px;accent-color:#0969da}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-hdr h2 svg{color:var(--fg-muted)}
+.hdr-actions{display:flex;gap:6px;align-items:center}
+.card-body{padding:14px 16px}
+
+/* ── 运行条:显性化三步 ── */
+.runbar{display:flex;align-items:center;gap:16px;padding:14px 18px;background:linear-gradient(180deg,var(--surface),var(--bg-subtle));border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.runbar-steps{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap;font-size:12px;color:var(--fg-muted)}
+.runbar-steps .step{display:inline-flex;align-items:center;gap:5px}
+.runbar-steps .num{width:18px;height:18px;border-radius:50%;background:var(--neutral-muted);color:var(--fg-muted);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.runbar-steps .arrow{color:var(--border-strong)}
+.runbar-status{font-size:12px;color:var(--fg-muted)}
+
+/* ── 设备 ── */
+.device-grid{display:flex;flex-direction:column;gap:8px}
+.device-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 11px;display:flex;align-items:center;gap:9px;transition:border-color .15s,box-shadow .15s}
+.device-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm)}
+.device-card input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.device-card input[type=checkbox]:disabled{cursor:not-allowed}
 .device-card .info{flex:1;min-width:0}
-.device-card .name{font-size:13px;font-weight:600;color:#1f2328;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.device-card .meta{font-size:11px;color:#59636e;margin-top:2px}
+.device-card .name{font-size:13px;font-weight:600;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.device-card .meta{font-size:11px;color:var(--fg-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .device-card .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.device-card .dot.online{background:#1a7f37}
-.device-card .dot.offline{background:#cf222e}
+.device-card .dot.online{background:var(--success);box-shadow:0 0 0 3px var(--success-subtle)}
+.device-card .dot.offline{background:var(--fg-subtle)}
 
+/* ── 用例 ── */
 .suite-list{display:flex;flex-direction:column;gap:6px}
-.suite-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#ffffff;border:1px solid #d0d7de;border-radius:6px}
-.suite-item input[type=radio]{accent-color:#0969da}
-.suite-item .name{flex:1;font-size:13px;font-weight:500}
-.suite-item .count{font-size:11px;color:#59636e}
-.suite-item .preview-btn{font-size:11px;color:#0969da;background:none;border:none;padding:2px 6px}
+.suite-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.suite-item:hover{border-color:var(--border-strong)}
+.suite-item input[type=radio]{accent-color:var(--accent);cursor:pointer}
+.suite-item .name{flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.suite-item .count{font-size:11px;color:var(--fg-muted);white-space:nowrap}
+.suite-subhead{font-size:11px;color:var(--fg-muted);font-weight:600;margin:10px 0 4px;padding-top:8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px}
 
-.action-bar{display:flex;align-items:center;gap:12px;padding:16px;background:#ffffff;border:1px solid #d0d7de;border-radius:8px;margin-bottom:16px}
-.action-bar .btn{padding:8px 20px;border-radius:6px;font-size:13px;font-weight:600;border:none;color:#fff}
-.action-bar .btn-run{background:#1f883d}
-.action-bar .btn-run:hover{background:#1a7f37}
-.action-bar .btn-run:disabled{background:#eaeef2;color:#8c959f;cursor:not-allowed}
-.action-bar .btn-secondary{background:#f6f8fa;border:1px solid #d0d7de;color:#1f2328}
-.action-bar .btn-secondary:hover{background:#eaeef2}
-.action-bar .status{flex:1;font-size:12px;color:#59636e;text-align:right}
+/* ── 阶段 ── */
+.stage-actions{display:flex;gap:8px;margin-top:10px}
+.stage-info{font-size:11px;color:var(--fg-muted);margin-top:8px;line-height:1.6}
 
+/* ── 结果 / 历史 ── */
 .result-list{display:flex;flex-direction:column;gap:6px}
-.result-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#ffffff;border:1px solid #d0d7de;border-radius:6px;font-size:12px}
-.result-item .icon{font-size:16px}
-.result-item .device{font-weight:600;color:#1f2328;min-width:120px}
-.result-item .detail{flex:1;color:#59636e}
-.result-item .time{color:#8c959f;font-size:11px}
-.result-item.passed{border-color:#1f883d}
-.result-item.failed{border-color:#cf222e}
-.result-item.running{border-color:#9a6700}
+.result-item{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;border-left-width:3px}
+.result-item .device{font-weight:600;color:var(--fg);min-width:120px}
+.result-item .detail{flex:1;color:var(--fg-muted)}
+.result-item .time{color:var(--fg-subtle);font-size:11px}
+.result-item.passed{border-left-color:var(--success)}
+.result-item.failed{border-left-color:var(--danger)}
+.result-item.running{border-left-color:var(--attention-fg)}
 
-.empty{text-align:center;padding:24px;color:#8c959f;font-size:13px}
+.empty{text-align:center;padding:22px 12px;color:var(--fg-subtle);font-size:13px;line-height:1.6}
+.empty a{cursor:pointer;font-weight:600}
 
-.modal-overlay{position:fixed;inset:0;background:rgba(31,35,40,.4);z-index:1000;display:flex;align-items:center;justify-content:center}
-.modal{background:#ffffff;border:1px solid #d0d7de;border-radius:12px;width:90%;max-width:600px;max-height:80vh;overflow:auto;box-shadow:0 8px 24px rgba(31,35,40,.15)}
-.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #d0d7de}
-.modal-hdr h3{font-size:14px;font-weight:600}
-.modal-hdr .close{background:none;border:none;color:#59636e;font-size:18px;cursor:pointer}
-.modal-body{padding:16px}
-.modal-body textarea{width:100%;min-height:200px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:12px;resize:vertical}
-.modal-body pre{background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:12px;font-size:11px;overflow-x:auto;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
-.modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #d0d7de}
+/* ── 弹窗 ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:600px;max-height:84vh;overflow:auto;box-shadow:var(--shadow)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1}
+.modal-hdr h3{font-size:15px;font-weight:650}
+.modal-hdr .close{background:none;border:none;color:var(--fg-muted);font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:6px}
+.modal-hdr .close:hover{background:var(--neutral-muted);color:var(--fg)}
+.modal-body{padding:18px}
+.modal-body textarea{width:100%;min-height:200px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--fg);padding:10px;font-family:'SF Mono',Consolas,monospace;font-size:12px;resize:vertical}
+.modal-body pre{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:11px;overflow-x:auto;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
 
-@media(max-width:768px){
-  .main{padding:12px}
-  .device-grid{grid-template-columns:1fr}
-  .action-bar{flex-wrap:wrap}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr;padding:12px}
+  .sidebar{position:static;max-height:none;overflow:visible}
+  .runbar{flex-wrap:wrap}
 }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <h1><span>🤖</span> AutoBot Dashboard</h1>
-  <div class="right">
-    <select id="project-select"><option value="">-- Select Project --</option></select>
-    <button class="btn-secondary" style="padding:6px 12px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:12px" id="btn-guide">? Guide</button>
-    <button class="btn-secondary" style="padding:6px 12px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;color:#1f2328;font-size:12px" id="btn-connect-help">+ Add Device</button>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg></span>
+    AutoBot <span class="brand-sub">控制台</span>
   </div>
-</div>
-
-<div class="main">
-  <div class="section" id="sec-devices">
-    <div class="section-hdr">
-      <h2>📱 Devices <span class="badge" id="device-count">0</span></h2>
-      <div class="actions"><button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;color:#59636e" id="btn-refresh-devices">↻ Refresh</button></div>
-    </div>
-    <div class="section-body">
-      <div class="device-grid" id="device-list"><div class="empty">No devices online</div></div>
-    </div>
+  <div class="topbar-right">
+    <select id="project-select" class="select"><option value="">选择项目</option></select>
+    <button class="btn btn-ghost btn-sm" id="btn-guide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>指南</button>
+    <button class="btn btn-primary btn-sm" id="btn-connect-help"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>添加设备</button>
   </div>
+</header>
 
-  <div class="section" id="sec-suites">
-    <div class="section-hdr">
-      <h2>📋 Test Suites <span class="badge" id="suite-count">0</span></h2>
-      <div class="actions">
-        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;color:#59636e" id="btn-import">Import</button>
-        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;color:#59636e" id="btn-paste">Paste JSON</button>
+<div class="app">
+  <aside class="sidebar">
+    <section class="card" id="sec-devices">
+      <div class="card-hdr">
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>设备 <span class="badge" id="device-count">0</span></h2>
+        <button class="btn btn-icon btn-sm" id="btn-refresh-devices" title="刷新"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg></button>
       </div>
-    </div>
-    <div class="section-body">
-      <div class="suite-list" id="suite-list"><div class="empty">No suites loaded</div></div>
-    </div>
-    <input type="file" id="file-input" accept=".json" style="display:none">
-  </div>
-
-  <div class="action-bar">
-    <button class="btn btn-run" id="btn-run" disabled>▶ Run on selected devices</button>
-    <button class="btn btn-secondary" id="btn-ai-gen" style="background:#f6f8fa;border:1px solid #d0d7de">✨ AI Generate</button>
-    <span class="status" id="run-status"></span>
-  </div>
-
-  <div class="section" id="sec-stages">
-    <div class="section-hdr">
-      <h2>🚀 Stages <span class="badge" id="stage-status">—</span></h2>
-      <div class="actions"><button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;color:#59636e" id="btn-refresh-stages">↻</button></div>
-    </div>
-    <div class="section-body">
-      <div id="stage-list"></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-run" id="btn-stage-all" style="font-size:12px;padding:6px 14px">▶ Run S1→S5 All</button>
+      <div class="card-body">
+        <div class="device-grid" id="device-list"><div class="empty">暂无设备</div></div>
       </div>
-      <div style="font-size:11px;color:#59636e;margin-top:6px" id="stage-progress-info"></div>
-    </div>
-  </div>
+    </section>
 
-  <div class="section" id="sec-results">
-    <div class="section-hdr">
-      <h2>📊 Results</h2>
-    </div>
-    <div class="section-body">
-      <div class="result-list" id="result-list"><div class="empty">No results yet</div></div>
-    </div>
-  </div>
-
-  <div class="section" id="sec-history">
-    <div class="section-hdr">
-      <h2>🕒 History</h2>
-      <div class="actions">
-        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;color:#59636e" id="btn-clear-history">Clear all</button>
-        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;color:#59636e" id="btn-refresh-history">↻ Refresh</button>
+    <section class="card" id="sec-suites">
+      <div class="card-hdr">
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>测试用例 <span class="badge" id="suite-count">0</span></h2>
+        <div class="hdr-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-import">导入</button>
+          <button class="btn btn-ghost btn-sm" id="btn-paste">粘贴 JSON</button>
+          <button class="btn btn-ghost btn-sm" id="btn-ai-gen"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5 10.1 7.6z"/></svg>AI 生成</button>
+        </div>
       </div>
+      <div class="card-body">
+        <div class="suite-list" id="suite-list"><div class="empty">先在右上角选择项目</div></div>
+      </div>
+      <input type="file" id="file-input" accept=".json" hidden>
+    </section>
+  </aside>
+
+  <main class="content">
+    <div class="runbar">
+      <div class="runbar-steps">
+        <span class="step"><span class="num">1</span>勾选设备</span>
+        <span class="arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <span class="step"><span class="num">2</span>选测试用例</span>
+        <span class="arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <span class="step"><span class="num">3</span>运行</span>
+      </div>
+      <button class="btn btn-success btn-lg" id="btn-run" disabled>▶ 运行选中用例</button>
+      <span class="runbar-status" id="run-status"></span>
     </div>
-    <div class="section-body">
-      <div class="result-list" id="history-list"><div class="empty">No history</div></div>
-    </div>
-  </div>
+
+    <section class="card" id="sec-stages">
+      <div class="card-hdr">
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.9.7-2.2-.2-3-.8-.8-2.1-.8-2.8 0z"/><path d="M12 15l-3-3a12 12 0 0 1 8-8c2.5 0 3 .5 3 3a12 12 0 0 1-8 8z"/><path d="M15 9h.01"/></svg>新用户流程 <span class="badge" id="stage-status">—</span></h2>
+        <button class="btn btn-icon btn-sm" id="btn-refresh-stages" title="刷新"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg></button>
+      </div>
+      <div class="card-body">
+        <div id="stage-list"></div>
+        <div class="stage-info" id="stage-progress-info"></div>
+      </div>
+    </section>
+
+    <section class="card" id="sec-results">
+      <div class="card-hdr"><h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>执行结果</h2></div>
+      <div class="card-body"><div class="result-list" id="result-list"><div class="empty">暂无结果 — 选好设备和用例后点运行</div></div></div>
+    </section>
+
+    <section class="card" id="sec-history">
+      <div class="card-hdr">
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-8 5M3 4v4h4"/><path d="M12 8v4l3 2"/></svg>历史</h2>
+        <div class="hdr-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-clear-history">清空</button>
+          <button class="btn btn-icon btn-sm" id="btn-refresh-history" title="刷新"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg></button>
+        </div>
+      </div>
+      <div class="card-body"><div class="result-list" id="history-list"><div class="empty">暂无历史</div></div></div>
+    </section>
+  </main>
 </div>
 
 <div id="modal-container"></div>

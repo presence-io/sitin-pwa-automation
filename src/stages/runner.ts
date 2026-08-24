@@ -17,11 +17,7 @@ export interface StageDefinition {
 }
 
 export const STAGES: StageDefinition[] = [
-  { id: 's1', name: 'Stage 1', amount: '$0.50', suiteFile: 'stage1.json' },
-  { id: 's2', name: 'Stage 2', amount: '$7.00', suiteFile: 'stage2.json' },
-  { id: 's3', name: 'Stage 3', amount: '$8.00', suiteFile: 'stage3.json' },
-  { id: 's4', name: 'Stage 4', amount: '$12.00', suiteFile: 'stage4.json' },
-  { id: 's5', name: 'Stage 5', amount: '$25.00', suiteFile: 'stage5.json' },
+  { id: 's1', name: '新用户完整流程', amount: '$0.50', suiteFile: 'stage1.json' },
 ];
 
 export interface StageProgress {
