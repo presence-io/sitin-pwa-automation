@@ -1,10 +1,16 @@
+import { pushLog } from './bus';
+
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export const log = (...a: unknown[]) =>
+export const log = (...a: unknown[]) => {
   console.log('%c[AutoBot]', 'color:#00bcd4;font-weight:bold', ...a);
+  pushLog('info', a);
+};
 
-export const warn = (...a: unknown[]) =>
+export const warn = (...a: unknown[]) => {
   console.warn('%c[AutoBot]', 'color:#ff9800;font-weight:bold', ...a);
+  pushLog('warn', a);
+};
 
 export function randName(): string {
   const a = ['Happy', 'Lucky', 'Sweet', 'Cool', 'Cute', 'Fun', 'Nice', 'Star'];

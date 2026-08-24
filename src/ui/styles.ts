@@ -51,6 +51,19 @@ export const CSS = `
 #autobot-panel .st.done{color:var(--ab-green)}
 #autobot-panel .st.error{color:var(--ab-red)}
 #autobot-panel .st.warning{color:var(--ab-orange)}
+#autobot-panel .conn-line{display:flex;align-items:center;gap:6px;padding:6px 9px;background:var(--ab-bg-soft);border:1px solid var(--ab-border-soft);border-radius:7px;margin-bottom:10px;font-size:11px;color:var(--ab-text-muted)}
+#autobot-panel .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--ab-text-subtle);flex-shrink:0}
+#autobot-panel .conn-dot.online{background:var(--ab-green)}
+#autobot-panel .conn-dot.connecting{background:var(--ab-amber)}
+#autobot-panel .conn-dot.reconnecting{background:var(--ab-orange)}
+#autobot-panel .conn-dot.error{background:var(--ab-red)}
+#autobot-panel .conn-meta{margin-left:auto;color:var(--ab-text-subtle);font-size:10px;word-break:break-all}
+#autobot-panel .ablog{height:128px;overflow-y:auto;background:#0d1117;border:1px solid var(--ab-border-soft);border-radius:6px;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;line-height:1.55}
+#autobot-panel .ablog .logln{color:#adbac7;word-break:break-all;white-space:pre-wrap}
+#autobot-panel .ablog .logln.warn{color:#e0a336}
+#autobot-fab.online{box-shadow:0 4px 14px rgba(9,105,218,.32),0 0 0 3px rgba(26,127,55,.5)}
+#autobot-fab.reconnecting{box-shadow:0 4px 14px rgba(9,105,218,.32),0 0 0 3px rgba(188,76,0,.55)}
+#autobot-fab.error{box-shadow:0 4px 14px rgba(9,105,218,.32),0 0 0 3px rgba(207,34,46,.6)}
 #autobot-panel .rec-steps{max-height:120px;overflow-y:auto;font-size:10px;color:var(--ab-text-muted);background:var(--ab-bg-soft);border:1px solid var(--ab-border-soft);border-radius:6px;padding:6px 8px;margin-top:4px}
 #autobot-panel .rec-steps .step{padding:2px 0;border-bottom:1px solid var(--ab-border-soft)}
 #autobot-panel .rec-steps .step:last-child{border-bottom:none}

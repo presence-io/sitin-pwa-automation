@@ -1,4 +1,5 @@
 import { log, warn } from '../core/helpers';
+import { setConn } from '../core/bus';
 import { configManager } from './config';
 import { runSuite } from './runner';
 import { generateReport, printReportToConsole } from './reporter';
@@ -52,11 +53,16 @@ async function registerDevice(): Promise<void> {
 
 async function sendHeartbeat(): Promise<void> {
   const deviceId = getDeviceId();
-  await fbPatch(`devices/${deviceId}`, {
-    status: 'online',
-    lastSeen: Date.now(),
-    project: configManager.getProject(),
-  });
+  try {
+    await fbPatch(`devices/${deviceId}`, {
+      status: 'online',
+      lastSeen: Date.now(),
+      project: configManager.getProject(),
+    });
+    setConn('online');
+  } catch {
+    setConn('reconnecting');
+  }
 }
 
 function startHeartbeat(): void {
@@ -86,6 +92,7 @@ function listenForCommands(): void {
 
     eventSource.addEventListener('put', (e: MessageEvent) => {
       lastSSEEvent = Date.now();
+      setConn('online');
       try {
         const payload = JSON.parse(e.data);
         if (!payload.data) return;
@@ -108,6 +115,7 @@ function listenForCommands(): void {
 
     eventSource.addEventListener('patch', (e: MessageEvent) => {
       lastSSEEvent = Date.now();
+      setConn('online');
       try {
         const payload = JSON.parse(e.data);
         if (!payload.data) return;
@@ -119,10 +127,11 @@ function listenForCommands(): void {
       } catch {}
     });
 
-    eventSource.addEventListener('keep-alive', () => { lastSSEEvent = Date.now(); });
+    eventSource.addEventListener('keep-alive', () => { lastSSEEvent = Date.now(); setConn('online'); });
 
     eventSource.onerror = () => {
       lastSSEEvent = Date.now();
+      setConn('reconnecting');
       warn('SSE connection error, will auto-reconnect');
     };
   }
@@ -133,6 +142,7 @@ function listenForCommands(): void {
   sseHealthTimer = setInterval(() => {
     if (Date.now() - lastSSEEvent > 90000) {
       log('SSE stale, reconnecting...');
+      setConn('reconnecting');
       if (eventSource) eventSource.close();
       connect();
     }
@@ -249,14 +259,22 @@ function onRemoteCommand(cb: (cmd: RemoteCommand) => void): void {
 }
 
 async function startRemote(): Promise<void> {
-  await registerDevice();
+  setConn('connecting');
+  try {
+    await registerDevice();
+    setConn('online');
+  } catch (e) {
+    // Register is the connectivity probe; on failure keep listeners running so heartbeat/SSE can recover.
+    setConn('error');
+    warn('Device register failed:', e);
+  }
   startHeartbeat();
   listenForCommands();
   onRemoteCommand((cmd) => {
     if (cmd.action === 'stage') executeStageCommand(cmd);
     else executeRemoteCommand(cmd);
   });
-  await cleanOldCommands();
+  cleanOldCommands().catch(() => {});
 }
 
 async function executeStageCommand(cmd: RemoteCommand): Promise<void> {

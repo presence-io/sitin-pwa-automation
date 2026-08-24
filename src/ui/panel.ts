@@ -10,6 +10,8 @@ import {
 } from '../stages';
 import { createTeachingUI } from '../teaching/ui';
 import { createTestingUI } from '../testing/ui';
+import { onConn, onLog, getLogs, type ConnState, type LogLine } from '../core/bus';
+import { configManager } from '../testing/config';
 import { CSS } from './styles';
 
 let panelEl: HTMLElement | null = null;
@@ -103,6 +105,8 @@ function togglePanel() {
 
 function refreshInfo() {
   if (!panelEl) return;
+  const meta = panelEl.querySelector('#conn-meta');
+  if (meta) meta.textContent = `${configManager.getProject()} · ${localStorage.getItem('autobot_device_id') || '?'}`;
   const el = panelEl.querySelector('#user-info');
   if (!el) return;
   const s = getAuth();
@@ -130,6 +134,14 @@ export function createPanel() {
     <div class="hdr"><h3>AutoBot v4</h3><button class="cb" id="btn-close">✕</button></div>
     <div class="body">
       <div class="info" id="user-info">...</div>
+
+      <div class="conn-line">
+        <span class="conn-dot" id="conn-dot"></span>
+        <span id="conn-text">连接中…</span>
+        <span class="conn-meta" id="conn-meta"></span>
+      </div>
+
+      ${grpHTML('log', '📡 运行日志', `<div class="ablog" id="ab-log"></div>`, true)}
 
       ${grpHTML('cfg', '⚙ 配置', `
         <div class="cfg">
@@ -228,6 +240,29 @@ export function createPanel() {
 
   // Testing mode
   createTestingUI(p.querySelector('#testing-section')!);
+
+  // Connection status + log mirror
+  const connDot = p.querySelector('#conn-dot') as HTMLElement;
+  const connText = p.querySelector('#conn-text') as HTMLElement;
+  const logBox = p.querySelector('#ab-log') as HTMLElement;
+  const CONN_LABEL: Record<ConnState, string> = {
+    connecting: '连接中…', online: '在线', reconnecting: '重连中…', error: '连接失败',
+  };
+  onConn((s) => {
+    connDot.className = `conn-dot ${s}`;
+    connText.textContent = CONN_LABEL[s];
+    fabEl!.className = s === 'connecting' ? '' : s;
+  });
+  const renderLog = (l: LogLine) => {
+    const d = document.createElement('div');
+    d.className = `logln ${l.level}`;
+    d.textContent = `${new Date(l.t).toTimeString().slice(0, 8)} ${l.msg}`;
+    logBox.appendChild(d);
+    while (logBox.childElementCount > 200) logBox.removeChild(logBox.firstChild!);
+    logBox.scrollTop = logBox.scrollHeight;
+  };
+  getLogs().forEach(renderLog);
+  onLog(renderLog);
 
   refreshInfo(); setInterval(refreshInfo, 3000);
   resumeS1(st, disableAll);
