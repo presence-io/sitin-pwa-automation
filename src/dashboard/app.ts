@@ -1657,10 +1657,10 @@ function showScreenModal(deviceId: string): void {
     } catch { startRtdbFallback(); }
   }
   startWebRtc();
-  // Arm the database fallback only if the peer hasn't connected in time. Allow
-  // enough time for the non-trickle TURN handshake (offer+answer ICE gather,
-  // then relay connectivity) before falling back to the DB.
-  fallbackTimer = setTimeout(() => { if (!rtcConnected) startRtdbFallback(); }, 14000);
+  // Show a picture fast: on mobile/symmetric-NAT the non-trickle WebRTC handshake
+  // usually can't complete, so start the DB stream quickly and let WebRTC upgrade
+  // to P2P in the background if it ever connects (onRtcConnected drops the DB path).
+  fallbackTimer = setTimeout(() => { if (!rtcConnected) startRtdbFallback(); }, 4000);
 
   const cleanup = () => {
     if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
