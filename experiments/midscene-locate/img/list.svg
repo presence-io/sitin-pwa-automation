@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="760" viewBox="0 0 390 760"><rect width="390" height="760" fill="#fff"/><circle cx='55' cy='60' r='28' fill='hsl(0,60%,65%)'/>
+    <text x='55' y='66' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='20' fill='#fff' text-anchor='middle'>A</text>
+    <text x='100' y='52' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='17' fill='#111' font-weight='600'>Alice</text>
+    <text x='100' y='86' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#666'>在吗?晚点约个时间</text>
+    <g fill='#bbb'><circle cx='344' cy='46' r='3'/><circle cx='353' cy='46' r='3'/><circle cx='362' cy='46' r='3'/></g>
+    <line x1='27' y1='128' x2='363' y2='128' stroke='#eee'/><circle cx='55' cy='178' r='28' fill='hsl(55,60%,65%)'/>
+    <text x='55' y='184' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='20' fill='#fff' text-anchor='middle'>B</text>
+    <text x='100' y='170' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='17' fill='#111' font-weight='600'>Bob</text>
+    <text x='100' y='204' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#666'>好的收到,明天见</text>
+    <g fill='#bbb'><circle cx='344' cy='164' r='3'/><circle cx='353' cy='164' r='3'/><circle cx='362' cy='164' r='3'/></g>
+    <line x1='27' y1='246' x2='363' y2='246' stroke='#eee'/><circle cx='55' cy='296' r='28' fill='hsl(110,60%,65%)'/>
+    <text x='55' y='302' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='20' fill='#fff' text-anchor='middle'>C</text>
+    <text x='100' y='288' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='17' fill='#111' font-weight='600'>Carol</text>
+    <text x='100' y='322' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#666'>这个方案我看过了</text>
+    <g fill='#bbb'><circle cx='344' cy='282' r='3'/><circle cx='353' cy='282' r='3'/><circle cx='362' cy='282' r='3'/></g>
+    <line x1='27' y1='364' x2='363' y2='364' stroke='#eee'/><circle cx='55' cy='414' r='28' fill='hsl(165,60%,65%)'/>
+    <text x='55' y='420' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='20' fill='#fff' text-anchor='middle'>D</text>
+    <text x='100' y='406' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='17' fill='#111' font-weight='600'>David</text>
+    <text x='100' y='440' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#666'>付款已经完成啦</text>
+    <g fill='#bbb'><circle cx='344' cy='400' r='3'/><circle cx='353' cy='400' r='3'/><circle cx='362' cy='400' r='3'/></g>
+    <line x1='27' y1='482' x2='363' y2='482' stroke='#eee'/><circle cx='55' cy='532' r='28' fill='hsl(220,60%,65%)'/>
+    <text x='55' y='538' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='20' fill='#fff' text-anchor='middle'>E</text>
+    <text x='100' y='524' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='17' fill='#111' font-weight='600'>Emma</text>
+    <text x='100' y='558' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#666'>周末一起吃饭?</text>
+    <g fill='#bbb'><circle cx='344' cy='518' r='3'/><circle cx='353' cy='518' r='3'/><circle cx='362' cy='518' r='3'/></g>
+    <line x1='27' y1='600' x2='363' y2='600' stroke='#eee'/><circle cx='55' cy='650' r='28' fill='hsl(275,60%,65%)'/>
+    <text x='55' y='656' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='20' fill='#fff' text-anchor='middle'>F</text>
+    <text x='100' y='642' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='17' fill='#111' font-weight='600'>Frank</text>
+    <text x='100' y='676' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#666'>文件发你邮箱了</text>
+    <g fill='#bbb'><circle cx='344' cy='636' r='3'/><circle cx='353' cy='636' r='3'/><circle cx='362' cy='636' r='3'/></g>
+    <line x1='27' y1='718' x2='363' y2='718' stroke='#eee'/></svg>

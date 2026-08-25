@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="760" viewBox="0 0 390 760">
+  <rect width="390" height="760" fill="#f7f7f9"/>
+  <text x='195' y='60' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='24' fill='#111' text-anchor='middle' font-weight='600'>会员登录</text>
+  <rect x='30' y='140' width='330' height='48' rx='8' fill='#fff' stroke='#ccc'/><text x='44' y='170' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='16' fill='#999' text-anchor='start' font-weight='400'>手机号</text>
+  <rect x='30' y='210' width='330' height='48' rx='8' fill='#fff' stroke='#ccc'/><text x='44' y='240' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='16' fill='#999' text-anchor='start' font-weight='400'>密码</text>
+  <rect x='30' y='288' width='20' height='20' rx='4' fill='#fff' stroke='#bbb'/><text x='58' y='304' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#555' text-anchor='start' font-weight='400'>记住我</text>
+  <text x='360' y='306' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='15' fill='#3a7afe' text-anchor='end' font-weight='400'>忘记密码?</text>
+  <rect x='30' y='340' width='330' height='50' rx='10' fill='#e23b3b' stroke='#e23b3b'/><text x='195' y='372' font-family="PingFang SC, Hiragino Sans GB, Heiti SC, sans-serif" font-size='18' fill='#fff' text-anchor='middle' font-weight='600'>登录</text>
+  </svg>
