@@ -3,16 +3,20 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { locate } from './locate.mjs';
+import { loadPng, savePng, drawRect, drawDot } from './pngbox.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 
 const ENDPOINT = process.env.ENDPOINT || 'https://callapi.top/v1';
 const API_KEY = process.env.API_KEY || process.env.CALLAPI_KEY;
 const MODEL = process.env.MODEL || 'gpt-5.6-terra';
+const FAMILY = process.env.FAMILY || (/deepseek/i.test(MODEL) ? 'deepseek' : 'gpt');
 const USE_JSON = process.env.USE_JSON !== '0';
 if (!API_KEY) { console.error('set API_KEY (never hardcode it)'); process.exit(1); }
 
-const manifest = JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8'));
+const ONLY = process.env.SCENE; // optional: run a single scene by name
+let manifest = JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8'));
+if (ONLY) manifest = manifest.filter((s) => s.name === ONLY);
 mkdirSync(join(DIR, 'out'), { recursive: true });
 
 const inside = (c, [x1, y1, x2, y2]) => c && c[0] >= x1 && c[0] <= x2 && c[1] >= y1 && c[1] <= y2;
@@ -35,9 +39,13 @@ for (const scene of manifest) {
   const pngPath = join(DIR, scene.png);
   const b64 = readFileSync(pngPath).toString('base64');
   const results = await mapLimit(scene.tests, 4, (test) =>
-    locate({ endpoint: ENDPOINT, apiKey: API_KEY, model: MODEL, imageBase64: b64, width: scene.W, height: scene.H, description: test.desc, useJsonMode: USE_JSON }));
+    locate({ endpoint: ENDPOINT, apiKey: API_KEY, model: MODEL, imageBase64: b64, width: scene.W, height: scene.H, description: test.desc, useJsonMode: USE_JSON, family: FAMILY }));
 
-  const overlays = [];
+  // annotated overlay via pngbox (rsvg blanks large raster <image> on this box):
+  // truth box green, predicted center dot (orange=hit, red=miss).
+  const basePng = join(DIR, 'out', `${scene.name}_base.png`);
+  let img = null;
+  try { execFileSync('sips', ['-s', 'format', 'png', pngPath, '--out', basePng]); img = loadPng(basePng); } catch { /* sips/png optional */ }
   scene.tests.forEach((test, k) => {
     const r = results[k];
     total++;
@@ -46,24 +54,15 @@ for (const scene of manifest) {
     let errPx = null;
     if (r.found) { const [tx, ty] = truthCenter(test.truth); errPx = Math.round(Math.hypot(r.center[0] - tx, r.center[1] - ty)); }
     rows.push({ scene: scene.name, desc: test.desc, ok, found: r.found, center: r.center, errPx, ms: r.ms, err: r.error });
-    // overlays: truth (green), predicted bbox (red dashed) + center dot
-    const [a, bb, c, d] = test.truth;
-    overlays.push(`<rect x='${a}' y='${bb}' width='${c - a}' height='${d - bb}' fill='none' stroke='#12b886' stroke-width='2'/>`);
-    if (r.found) {
-      const [l, t, rr, bo] = r.bbox;
-      overlays.push(`<rect x='${l}' y='${t}' width='${rr - l}' height='${bo - t}' fill='none' stroke='#e8590c' stroke-width='2' stroke-dasharray='5 3'/>`);
-      overlays.push(`<circle cx='${r.center[0]}' cy='${r.center[1]}' r='6' fill='${ok ? '#e8590c' : '#e03131'}'/>`);
+    if (img) {
+      drawRect(img, test.truth, [18, 184, 134], 3); // truth green
+      if (r.found) {
+        drawRect(img, r.bbox, [232, 89, 12], 2);   // predicted bbox orange
+        drawDot(img, r.center[0], r.center[1], ok ? [232, 89, 12] : [224, 49, 49], 7);
+      }
     }
-    overlays.push(`<text x='6' y='${scene.H - 6 - k * 16}' font-size='12' font-family='sans-serif' fill='${ok ? '#12b886' : '#e03131'}'>${ok ? 'PASS' : 'FAIL'} ${test.desc.slice(0, 14)}</text>`);
   });
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${scene.W}" height="${scene.H}">
-    <image xlink:href="data:image/png;base64,${b64}" x="0" y="0" width="${scene.W}" height="${scene.H}"/>
-    ${overlays.join('\n')}
-  </svg>`;
-  const svgPath = join(DIR, 'out', `${scene.name}_annotated.svg`);
-  writeFileSync(svgPath, svg);
-  try { execFileSync('rsvg-convert', [svgPath, '-o', join(DIR, 'out', `${scene.name}_annotated.png`)]); } catch { /* rsvg-convert optional */ }
+  if (img) savePng(img, join(DIR, 'out', `${scene.name}_annotated.png`));
 }
 
 // report
