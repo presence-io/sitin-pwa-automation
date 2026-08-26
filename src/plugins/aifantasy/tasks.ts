@@ -1,5 +1,6 @@
-import { log, warn, sleep, setNativeValue, findBtn, spaNav, dismissModals } from '../core/helpers';
-import { isInApp } from '../core/config';
+import { log, warn, sleep, setNativeValue, findBtn, spaNav } from '../../core/helpers';
+import { isInApp } from './config';
+import { dismissModals } from './modals';
 
 export async function finishTaskViaDebug(taskId: number): Promise<boolean> {
   log('finishTask:', taskId);

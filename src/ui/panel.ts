@@ -1,13 +1,6 @@
 import { log } from '../core/helpers';
-import { CFG, saveCfg, getAuth, getToken, isInApp } from '../core/config';
-import { finishTaskViaDebug } from '../core/tasks';
-import { triggerMockCall } from '../core/mockCall';
-import { autoPost } from '../core/post';
-import {
-  stepDeleteAccount, stepQuickLogin, stepOnboarding, stepStage1Cashout,
-  runS1, resumeS1,
-  type StatusFn, type DisableAllFn,
-} from '../stages';
+import { getActivePlugin } from '../plugins/registry';
+import type { StatusFn, DisableAllFn } from '../plugins/types';
 import { createTeachingUI } from '../teaching/ui';
 import { createTestingUI } from '../testing/ui';
 import { onConn, onLog, getLogs, type ConnState, type LogLine } from '../core/bus';
@@ -110,13 +103,12 @@ function refreshInfo() {
   if (meta) {
     const id = localStorage.getItem('autobot_device_id') || '?';
     const label = localStorage.getItem('autobot_device_label') || '';
-    meta.textContent = `${configManager.getProject()} · ${label || id}`;
+    meta.textContent = `${configManager.getProject() ?? getActivePlugin().id} · ${label || id}`;
   }
   const el = panelEl.querySelector('#user-info');
   if (!el) return;
-  const s = getAuth();
-  if (s?.userInfo) el.innerHTML = `<b>ID:</b> ${s.userInfo.userId || '?'} | ${s.userInfo.username || '-'} | ${s.userState || '?'} | ${isInApp() ? 'APP' : 'H5'}`;
-  else el.innerHTML = getToken() ? `Token 存在 | ${isInApp() ? 'APP' : 'H5'}` : '<b>未登录</b>';
+  // The identity line (login state etc.) is app-specific — the active plugin owns it.
+  el.innerHTML = getActivePlugin().identityHtml?.() ?? '';
 }
 
 function grpHTML(id: string, title: string, contentHTML: string, openDefault = false) {
@@ -133,10 +125,11 @@ export function createPanel() {
   fabEl = document.createElement('button'); fabEl.id = 'autobot-fab'; fabEl.textContent = '⚡';
   fabEl.addEventListener('click', togglePanel); document.body.appendChild(fabEl);
 
+  const plugin = getActivePlugin();
   const p = document.createElement('div'); p.id = 'autobot-panel';
   makeDraggable(fabEl, p);
   p.innerHTML = `
-    <div class="hdr"><h3>AutoBot v4</h3><button class="cb" id="btn-close">✕</button></div>
+    <div class="hdr"><h3>${plugin.panelTitle ?? 'AutoBot v4'}</h3><button class="cb" id="btn-close">✕</button></div>
     <div class="body">
       <div class="info" id="user-info">...</div>
 
@@ -148,55 +141,7 @@ export function createPanel() {
 
       ${grpHTML('log', '📡 运行日志', `<div class="ablog" id="ab-log"></div>`, true)}
 
-      ${grpHTML('cfg', '⚙ 配置', `
-        <div class="cfg">
-          <label>用户名 (留空随机)</label><input id="cfg-username" value="${CFG.username}">
-          <label>年龄</label><input type="number" id="cfg-age" value="${CFG.age}">
-          <label>PayPal 邮箱</label><input id="cfg-paypal" value="${CFG.paypalEmail}">
-          <label>头像 URL</label><input id="cfg-photo" value="${CFG.photoUrl}">
-          <label>Mock 单价 ($/min)</label><input id="cfg-price" value="${CFG.mockPrice}">
-        </div>
-      `)}
-
-      ${grpHTML('s1', '新用户流程 — 注销 → 登录 → onboarding → $0.50', `
-        <div class="row"><button id="btn-del">注销账号</button><span class="st" id="st-s1">待执行</span></div>
-        <div class="row"><button id="btn-login">快速登录</button></div>
-        <div class="row"><button id="btn-onboard">完成注册</button></div>
-        <div class="row"><button id="btn-cashout1">提现 $0.50</button></div>
-        <div class="row"><button id="btn-s1-all" class="accent">一键跑完整流程</button></div>
-      `, true)}
-
-      ${grpHTML('tools', '🛠 工具', `
-        <div class="row"><button id="btn-post" class="wide">自动发帖</button><span class="st" id="st-post">—</span></div>
-        <div class="row"><button id="btn-mock" class="wide">触发 Mock Call</button><span class="st" id="st-mock">—</span></div>
-        <div class="row">
-          <button id="btn-mock-off" class="wide warn">关闭 Mock 视频</button>
-          <button id="btn-mock-on" class="wide green">开启 Mock 视频</button>
-        </div>
-        <div class="row"><button id="btn-task" class="wide">完成指定任务</button><select id="cfg-taskid" style="width:144px;margin-bottom:0;font-size:10px">
-          <option value="">-- 选择任务 --</option>
-          <option value="101">101 Register</option>
-          <option value="102">102 Camera</option>
-          <option value="103">103 Microphone</option>
-          <option value="105">105 Location</option>
-          <option value="135">135 Location App</option>
-          <option value="112">112 Install APK</option>
-          <option value="118">118 Face Verify</option>
-          <option value="110">110 Bind Instagram</option>
-          <option value="107">107 Notification</option>
-          <option value="132">132 First Post</option>
-          <option value="200001">200001 SecondEarn</option>
-          <option value="200002">200002 ThirdEarn</option>
-          <option value="200003">200003 FourthEarn</option>
-          <option value="200004">200004 FifthEarn</option>
-          <option value="200005">200005 SixthEarn</option>
-          <option value="200006">200006 SeventhEarn</option>
-          <option value="200010">200010 4th Duration</option>
-          <option value="200011">200011 5th Duration</option>
-          <option value="200012">200012 6th Duration</option>
-          <option value="200013">200013 7th Duration</option>
-        </select></div>
-      `)}
+      <div id="plugin-section"></div>
 
       <div id="teaching-section"></div>
       <div id="testing-section"></div>
@@ -204,7 +149,7 @@ export function createPanel() {
   `;
   document.body.appendChild(p); panelEl = p;
 
-  // Group toggle
+  // Group toggle (covers the generic log group; each mounted section self-wires its own)
   p.querySelectorAll('.grp-hdr').forEach(hdr => {
     hdr.addEventListener('click', () => {
       const body = hdr.nextElementSibling as HTMLElement;
@@ -234,30 +179,8 @@ export function createPanel() {
     });
   }
 
-  // Config bindings
-  const bind = (id: string, key: keyof typeof CFG) =>
-    p.querySelector(id)!.addEventListener('input', (e) => {
-      (CFG as any)[key] = (e.target as HTMLInputElement).value.trim(); saveCfg();
-    });
-  bind('#cfg-username', 'username'); bind('#cfg-age', 'age'); bind('#cfg-paypal', 'paypalEmail');
-  bind('#cfg-photo', 'photoUrl'); bind('#cfg-price', 'mockPrice');
-
-  // Stage 1
-  p.querySelector('#btn-del')!.addEventListener('click', () => stepDeleteAccount(st));
-  p.querySelector('#btn-login')!.addEventListener('click', () => stepQuickLogin(st));
-  p.querySelector('#btn-onboard')!.addEventListener('click', () => stepOnboarding(st));
-  p.querySelector('#btn-cashout1')!.addEventListener('click', () => stepStage1Cashout(st));
-  p.querySelector('#btn-s1-all')!.addEventListener('click', () => runS1(st, disableAll));
-
-  // Tools
-  p.querySelector('#btn-post')!.addEventListener('click', () => autoPost((msg) => st('post', 'running', msg)));
-  p.querySelector('#btn-mock')!.addEventListener('click', () => triggerMockCall());
-  p.querySelector('#btn-mock-off')!.addEventListener('click', () => { localStorage.setItem('debug_disable_auto_mock', '1'); alert('Mock 视频已关闭'); });
-  p.querySelector('#btn-mock-on')!.addEventListener('click', () => { localStorage.setItem('debug_disable_auto_mock', '0'); alert('Mock 视频已开启'); });
-  p.querySelector('#btn-task')!.addEventListener('click', () => {
-    const id = (p.querySelector('#cfg-taskid') as HTMLSelectElement).value.trim();
-    if (id) finishTaskViaDebug(Number(id));
-  });
+  // App-specific sections (config, quick flows, tools) — drawn by the active plugin.
+  plugin.mountPanel?.({ container: p.querySelector('#plugin-section')!, st, disableAll });
 
   // Teaching mode
   createTeachingUI(p.querySelector('#teaching-section')!);
@@ -289,5 +212,4 @@ export function createPanel() {
   onLog(renderLog);
 
   refreshInfo(); setInterval(refreshInfo, 3000);
-  resumeS1(st, disableAll);
 }

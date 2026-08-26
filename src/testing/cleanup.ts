@@ -1,18 +1,9 @@
-import { sleep, spaNav, findBtn, warn, log } from '../core/helpers';
-import { CFG } from '../core/config';
+import { sleep, spaNav, findBtn, warn } from '../core/helpers';
 import { configManager } from './config';
-import { finishTaskViaDebug, completeTask } from '../core/tasks';
-import { triggerMockCall, runMockCalls, removeAutoAccept, installAutoAccept } from '../core/mockCall';
-import { doCashout } from '../core/cashout';
-import {
-  stepDeleteAccount, stepQuickLogin, stepOnboarding, stepStage1Cashout,
-} from '../stages/stage1';
+import { getActivePlugin } from '../plugins/registry';
 import type { CleanupFnConfig } from './types';
 
-// Dummy status function for stage steps called via test cases
-const dummySt = (key: string, state: string, msg: string) => log(`[${key}] ${msg}`);
-
-// ── Built-in functions (no args) ──
+// ── Generic built-in functions (no args) ──
 
 const builtinFunctions: Record<string, () => Promise<void>> = {
   clearLocalStorage: async () => {
@@ -41,47 +32,11 @@ const builtinFunctions: Record<string, () => Promise<void>> = {
     await builtinFunctions.clearIndexedDB();
     await builtinFunctions.clearCookies();
   },
-
-  // Stage operation functions
-  deleteAccount: async () => { await stepDeleteAccount(dummySt); },
-  quickLogin: async () => { await stepQuickLogin(dummySt); },
-  onboarding: async () => { await stepOnboarding(dummySt); },
-  cashout: async () => { await doCashout(); },
-  installAutoAccept: async () => { installAutoAccept(); },
-  removeAutoAccept: async () => { removeAutoAccept(); },
 };
 
-// ── Functions with args ──
+// ── Generic functions with args ──
 
 const argFunctions: Record<string, (args: any[]) => Promise<void>> = {
-  completeTask: async (args) => {
-    const taskId = Number(args[0]);
-    const label = String(args[1] || '');
-    await completeTask(taskId, label);
-  },
-  finishTask: async (args) => {
-    await finishTaskViaDebug(Number(args[0]));
-  },
-  mockCalls: async (args) => {
-    const count = Number(args[0]) || 1;
-    await runMockCalls(count);
-    removeAutoAccept();
-  },
-  mockCallsAuto: async (args) => {
-    // Auto-calculate based on earnings requirement and mock price
-    const earnRequired = Number(args[0]) || 0;
-    const durationRequired = Number(args[1]) || 0;
-    const pricePerMin = parseFloat(CFG.mockPrice) || 10;
-    const callsForEarn = earnRequired > 0 ? Math.ceil(earnRequired / pricePerMin) : 0;
-    const callsForDuration = durationRequired > 0 ? Math.ceil(durationRequired) : 0;
-    const count = Math.max(callsForEarn, callsForDuration) + 1;
-    log(`mockCallsAuto: earn=$${earnRequired}, dur=${durationRequired}min, price=$${pricePerMin}/min → ${count} calls`);
-    await runMockCalls(count);
-    removeAutoAccept();
-  },
-  triggerMock: async () => {
-    await triggerMockCall();
-  },
   wait: async (args) => {
     await sleep(Number(args[0]) || 1000);
   },
@@ -149,19 +104,26 @@ async function executeCustomCleanup(config: CleanupFnConfig, callFn: (name: stri
 // ── Unified call entry ──
 
 export async function callCleanupFunction(name: string, args?: any[]): Promise<void> {
-  // Built-in no-arg functions
+  // Generic built-in no-arg functions
   if (builtinFunctions[name]) {
     await builtinFunctions[name]();
     return;
   }
 
-  // Built-in arg functions
+  // Generic built-in arg functions
   if (argFunctions[name]) {
     await argFunctions[name](args || []);
     return;
   }
 
-  // Project custom functions from config
+  // App-specific functions provided by the active project plugin
+  const pluginFn = getActivePlugin().callFunctions?.[name];
+  if (pluginFn) {
+    await pluginFn(args || []);
+    return;
+  }
+
+  // Project custom functions from remote config
   const custom = configManager.getCleanupFunctions()[name];
   if (custom) {
     await executeCustomCleanup(custom, callCleanupFunction);

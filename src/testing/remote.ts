@@ -4,7 +4,7 @@ import { configManager } from './config';
 import { runSuite, cancelRun, wasCancelled } from './runner';
 import { generateReport, printReportToConsole } from './reporter';
 import { fetchRemoteSuite } from './repository';
-import { runStage, runAllStages, STAGES } from '../stages/runner';
+import { runStage, runAllStages } from '../stages/runner';
 import { st as panelSt, disableAll as panelDisableAll } from '../ui/panel';
 import {
   DB_URL, fbPut, fbGet, fbPatch, fbDelete,

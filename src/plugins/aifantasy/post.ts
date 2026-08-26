@@ -1,5 +1,6 @@
-import { log, sleep, findBtn, spaNav, setNativeValue, fetchImageAsFile, injectFile, dismissModals } from '../core/helpers';
-import { CFG } from '../core/config';
+import { log, sleep, findBtn, spaNav, setNativeValue, fetchImageAsFile, injectFile } from '../../core/helpers';
+import { CFG } from './config';
+import { dismissModals } from './modals';
 
 export async function autoPost(statusFn?: (msg: string) => void) {
   statusFn?.('Posting...');

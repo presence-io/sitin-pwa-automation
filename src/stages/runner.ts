@@ -4,21 +4,16 @@ import { getDeviceId } from '../testing/remote';
 import { runSuite } from '../testing/runner';
 import { generateReport, printReportToConsole } from '../testing/reporter';
 import { fetchRemoteSuite } from '../testing/repository';
+import { getActivePlugin } from '../plugins/registry';
+import type { StageDefinition, StatusFn, DisableAllFn } from '../plugins/types';
 import type { TestSuite } from '../testing/types';
 
-export type StatusFn = (key: string, state: string, msg: string) => void;
-export type DisableAllFn = (v: boolean) => void;
+export type { StatusFn, DisableAllFn, StageDefinition };
 
-export interface StageDefinition {
-  id: string;
-  name: string;
-  amount: string;
-  suiteFile: string;
-}
-
-export const STAGES: StageDefinition[] = [
-  { id: 's1', name: '新用户完整流程', amount: '$0.50', suiteFile: 'stage1.json' },
-];
+// Stage list + Firebase namespace come from the active project plugin so this
+// orchestration stays app-agnostic.
+function stageList(): StageDefinition[] { return getActivePlugin().stages ?? []; }
+function firebaseProject(): string { const p = getActivePlugin(); return p.firebaseProject ?? p.id; }
 
 export interface StageProgress {
   stageId: string;
@@ -36,11 +31,11 @@ async function reportProgress(progress: StageProgress): Promise<void> {
 }
 
 async function loadStageSuite(stageIndex: number): Promise<TestSuite | null> {
-  const stage = STAGES[stageIndex];
+  const stage = stageList()[stageIndex];
   if (!stage) return null;
 
   // Try Firebase first (user may have edited)
-  const project = 'gracechat';
+  const project = firebaseProject();
   const fbKey = stage.suiteFile.replace('.json', '');
   const fbSuite = await fbGet<TestSuite>(`suites/${project}/${fbKey}`);
   if (fbSuite && fbSuite.cases) {
@@ -63,14 +58,14 @@ export async function runStage(
   stageIndex: number,
   st: StatusFn,
 ): Promise<boolean> {
-  const stage = STAGES[stageIndex];
+  const stage = stageList()[stageIndex];
   if (!stage) return false;
 
   const progress: StageProgress = {
     stageId: stage.id,
     stageName: stage.name,
     stageIndex,
-    totalStages: STAGES.length,
+    totalStages: stageList().length,
     status: 'running',
     detail: 'Loading suite...',
     updatedAt: Date.now(),
@@ -111,15 +106,16 @@ export async function runAllStages(
   startFrom = 0,
 ): Promise<boolean> {
   disableAll(true);
-  for (let i = startFrom; i < STAGES.length; i++) {
-    st(STAGES[i].id, 'running', `${STAGES[i].name} 开始...`);
+  const stages = stageList();
+  for (let i = startFrom; i < stages.length; i++) {
+    st(stages[i].id, 'running', `${stages[i].name} 开始...`);
     const ok = await runStage(i, st);
     if (!ok) {
-      st(STAGES[i].id, 'error', `${STAGES[i].name} 失败`);
+      st(stages[i].id, 'error', `${stages[i].name} 失败`);
       disableAll(false);
       return false;
     }
-    st(STAGES[i].id, 'done', `${STAGES[i].name} 完成 ✓`);
+    st(stages[i].id, 'done', `${stages[i].name} 完成 ✓`);
     await sleep(1000);
   }
   disableAll(false);

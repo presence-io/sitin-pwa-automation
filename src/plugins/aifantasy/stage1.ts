@@ -1,7 +1,8 @@
-import { log, sleep, findBtn, spaNav, setNativeValue, typeInto, waitForEl, randName, fetchImageAsFile, injectFile, dismissModals } from '../core/helpers';
-import { CFG, getAuth, getToken, getUserId } from '../core/config';
-import { doCashout } from '../core/cashout';
-import type { StatusFn, DisableAllFn } from './runner';
+import { log, sleep, findBtn, spaNav, setNativeValue, typeInto, waitForEl, randName, fetchImageAsFile, injectFile } from '../../core/helpers';
+import { CFG, getAuth, getToken, getUserId } from './config';
+import { doCashout } from './cashout';
+import { dismissModals } from './modals';
+import type { StatusFn } from '../types';
 
 export async function stepDeleteAccount(st: StatusFn) {
   st('s1', 'running', '注销账号...');

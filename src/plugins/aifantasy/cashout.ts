@@ -1,5 +1,6 @@
-import { log, sleep, findBtn, spaNav, typeInto, dismissModals } from '../core/helpers';
-import { CFG } from '../core/config';
+import { log, sleep, findBtn, spaNav, typeInto } from '../../core/helpers';
+import { CFG } from './config';
+import { dismissModals } from './modals';
 
 export async function doCashout() {
   log('doCashout');

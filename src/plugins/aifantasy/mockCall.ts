@@ -1,5 +1,6 @@
-import { log, warn, sleep, setNativeValue, findBtn, spaNav, dismissModals } from '../core/helpers';
-import { CFG } from '../core/config';
+import { log, warn, sleep, setNativeValue, findBtn, spaNav } from '../../core/helpers';
+import { CFG } from './config';
+import { dismissModals } from './modals';
 
 let autoAcceptObs: MutationObserver | null = null;
 
