@@ -986,7 +986,7 @@ function showScreenModal(deviceId: string): void {
               <input id="st-search" placeholder="搜索键/值…" style="flex:1;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;color:var(--fg);padding:4px 8px;font-size:11px" />
               <span id="st-count" style="font-size:11px;color:var(--fg-muted);white-space:nowrap"></span>
             </div>
-            <div id="storage-list" style="height:240px;overflow:auto;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+            <div id="storage-list" style="height:240px;overflow:auto;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
           </div>
 
           <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -996,7 +996,7 @@ function showScreenModal(deviceId: string): void {
               <span id="nw-count" style="font-size:11px;color:var(--fg-muted);white-space:nowrap"></span>
               <button id="nw-clear" title="清空显示" style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
             </div>
-            <div id="network-list" style="height:240px;overflow:auto;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+            <div id="network-list" style="height:240px;overflow:auto;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
           </div>
         </div>
       </div>
@@ -1030,6 +1030,42 @@ function showScreenModal(deviceId: string): void {
     return safe.replace(re, '<mark style="background:var(--attention-subtle);color:var(--fg);border-radius:2px">$1</mark>');
   }
 
+  // Logs are virtualized: only the rows in view (+ a little overscan) live in the
+  // DOM. A full-height sizer div carries the scrollbar, so scrollTop stays stable
+  // while we swap the absolutely-positioned window on scroll — thousands of lines
+  // stay smooth. Rows are fixed-height single lines (newlines collapse under
+  // white-space:nowrap, overflow ellipsizes); hover a row for the full text.
+  const LOG_ROW_H = 18;
+  let logFiltered: Array<{ level: string; msg: string; ts: number }> = [];
+  let logRaf = 0;
+
+  function logRowHtml(e: { level: string; msg: string; ts: number }, q: string, top: number): string {
+    const time = new Date(e.ts).toLocaleTimeString();
+    const color = LEVEL_COLOR[e.level] || 'var(--fg)';
+    const title = escHtml(`[${e.level}] ${e.msg}`).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+    return `<div title="${title}" style="position:absolute;top:${top}px;left:0;right:0;height:${LOG_ROW_H}px;line-height:${LOG_ROW_H}px;padding:0 2px;color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">` +
+      `<span style="color:var(--fg-muted)">${time}</span> ` +
+      `<span style="color:var(--fg-muted)">[${e.level}]</span> ` +
+      highlight(e.msg, q) +
+      `</div>`;
+  }
+
+  function paintLogWindow(): void {
+    const total = logFiltered.length;
+    if (!total) { logListEl.innerHTML = '<div style="color:var(--fg-muted);padding:6px">暂无日志</div>'; return; }
+    const q = logSearchEl.value.trim();
+    const viewH = logListEl.clientHeight || 280;
+    // Clamp against the NEW total so the window is valid even before the browser
+    // clamps a now-too-large scrollTop (e.g. a filter that shrank the list).
+    const maxScroll = Math.max(0, total * LOG_ROW_H - viewH);
+    const st = Math.min(logListEl.scrollTop, maxScroll);
+    const start = Math.max(0, Math.floor(st / LOG_ROW_H) - 6);
+    const end = Math.min(total, Math.ceil((st + viewH) / LOG_ROW_H) + 6);
+    const rows: string[] = [];
+    for (let i = start; i < end; i++) rows.push(logRowHtml(logFiltered[i], q, i * LOG_ROW_H));
+    logListEl.innerHTML = `<div style="position:relative;height:${total * LOG_ROW_H}px">${rows.join('')}</div>`;
+  }
+
   function renderLogs(): void {
     const q = logSearchEl.value.trim();
     const onlyMatch = logFilterEl.checked;
@@ -1037,27 +1073,23 @@ function showScreenModal(deviceId: string): void {
     const ql = q.toLowerCase();
     const atBottom = logListEl.scrollHeight - logListEl.scrollTop - logListEl.clientHeight < 24;
 
-    let shown = 0;
-    const rows: string[] = [];
+    logFiltered = [];
     for (const e of logEntries) {
       if (lvl && e.level !== lvl) continue;
       const matches = q ? e.msg.toLowerCase().includes(ql) : false;
       if (onlyMatch && q && !matches) continue;
-      shown++;
-      const time = new Date(e.ts).toLocaleTimeString();
-      const color = LEVEL_COLOR[e.level] || 'var(--fg)';
-      rows.push(
-        `<div style="padding:1px 0;color:${color};white-space:pre-wrap;word-break:break-word">` +
-        `<span style="color:var(--fg-muted)">${time}</span> ` +
-        `<span style="color:var(--fg-muted)">[${e.level}]</span> ` +
-        highlight(e.msg, q) +
-        `</div>`,
-      );
+      logFiltered.push(e);
     }
-    logListEl.innerHTML = rows.join('') || '<div style="color:var(--fg-muted)">暂无日志</div>';
+    const shown = logFiltered.length;
+    paintLogWindow();
+    if (atBottom) { logListEl.scrollTop = logListEl.scrollHeight; paintLogWindow(); }
     logCountEl.textContent = q || lvl ? `${shown}/${logEntries.length}` : `${logEntries.length}`;
-    if (atBottom) logListEl.scrollTop = logListEl.scrollHeight;
   }
+
+  logListEl.addEventListener('scroll', () => {
+    if (logRaf) return;
+    logRaf = requestAnimationFrame(() => { logRaf = 0; paintLogWindow(); });
+  });
 
   logSearchEl.addEventListener('input', renderLogs);
   logFilterEl.addEventListener('change', renderLogs);
@@ -1086,23 +1118,29 @@ function showScreenModal(deviceId: string): void {
     local: [], session: [], origin: '',
   };
 
+  const TH = 'position:sticky;top:0;z-index:1;background:var(--bg-subtle);text-align:left;padding:4px 6px;border-bottom:1px solid var(--border);color:var(--fg-muted);font-weight:600;white-space:nowrap';
+  const TD = 'padding:3px 6px;border-bottom:1px solid var(--neutral-muted);vertical-align:top';
+
   function renderStorage(): void {
     const rows = storeTab === 'local' ? storeData.local : storeData.session;
     const q = stSearchEl.value.trim().toLowerCase();
     let shown = 0;
-    const html: string[] = [];
+    const body: string[] = [];
     for (const [k, v] of rows) {
       if (q && !k.toLowerCase().includes(q) && !v.toLowerCase().includes(q)) continue;
       shown++;
-      html.push(
-        `<div style="padding:3px 0;border-bottom:1px solid var(--neutral-muted);white-space:pre-wrap;word-break:break-all">` +
-        `<span style="color:var(--accent-strong);font-weight:600">${highlight(k, q)}</span>` +
-        `<span style="color:var(--fg-muted)"> = </span>` +
-        `<span style="color:var(--fg)">${highlight(v, q)}</span>` +
-        `</div>`,
+      body.push(
+        `<tr>` +
+        `<td style="${TD};color:var(--accent-strong);font-weight:600;word-break:break-all">${highlight(k, q)}</td>` +
+        `<td style="${TD};color:var(--fg);white-space:pre-wrap;word-break:break-all">${highlight(v, q)}</td>` +
+        `</tr>`,
       );
     }
-    storageListEl.innerHTML = html.join('') || '<div style="color:var(--fg-muted)">暂无数据</div>';
+    storageListEl.innerHTML = body.length
+      ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed">` +
+        `<thead><tr><th style="${TH};width:34%">Key</th><th style="${TH}">Value</th></tr></thead>` +
+        `<tbody>${body.join('')}</tbody></table>`
+      : '<div style="color:var(--fg-muted);padding:6px">暂无数据</div>';
     stCountEl.textContent = (q ? `${shown}/${rows.length}` : `${rows.length}`) + (storeData.origin ? ` · ${storeData.origin}` : '');
   }
 
@@ -1159,7 +1197,7 @@ function showScreenModal(deviceId: string): void {
   function renderNetwork(): void {
     const q = nwSearchEl.value.trim().toLowerCase();
     let shown = 0;
-    const html: string[] = [];
+    const body: string[] = [];
     for (let i = netEntries.length - 1; i >= 0; i--) {
       const e = netEntries[i];
       if (q && !e.url.toLowerCase().includes(q) && !e.method.toLowerCase().includes(q)) continue;
@@ -1168,16 +1206,25 @@ function showScreenModal(deviceId: string): void {
       const statusTxt = e.err ? '✕' : (e.status || '…');
       const time = new Date(e.ts).toLocaleTimeString();
       const size = fmtSize(e.size);
-      html.push(
-        `<div style="padding:3px 0;border-bottom:1px solid var(--neutral-muted);white-space:pre-wrap;word-break:break-all">` +
-        `<span style="color:var(--accent-strong);font-weight:600">${escHtml(e.method)}</span> ` +
-        `<span style="color:${color};font-weight:600">${escHtml(String(statusTxt))}</span> ` +
-        `<span style="color:var(--fg)">${highlight(e.url, q)}</span>` +
-        `<span style="color:var(--fg-muted)"> · ${e.durMs}ms${size ? ' · ' + size : ''} · ${escHtml(time)}${e.err ? ' · ' + escHtml(e.err) : ''}</span>` +
-        `</div>`,
+      const urlCell = highlight(e.url, q) + (e.err ? ` <span style="color:var(--danger)">· ${escHtml(e.err)}</span>` : '');
+      body.push(
+        `<tr>` +
+        `<td style="${TD};color:var(--accent-strong);font-weight:600;white-space:nowrap">${escHtml(e.method)}</td>` +
+        `<td style="${TD};color:${color};font-weight:600;white-space:nowrap">${escHtml(String(statusTxt))}</td>` +
+        `<td style="${TD};color:var(--fg);word-break:break-all">${urlCell}</td>` +
+        `<td style="${TD};color:var(--fg-muted);white-space:nowrap;text-align:right">${e.durMs}ms</td>` +
+        `<td style="${TD};color:var(--fg-muted);white-space:nowrap;text-align:right">${size || '—'}</td>` +
+        `<td style="${TD};color:var(--fg-muted);white-space:nowrap">${escHtml(time)}</td>` +
+        `</tr>`,
       );
     }
-    networkListEl.innerHTML = html.join('') || '<div style="color:var(--fg-muted)">暂无数据</div>';
+    networkListEl.innerHTML = body.length
+      ? `<table style="width:100%;border-collapse:collapse">` +
+        `<thead><tr>` +
+        `<th style="${TH}">方法</th><th style="${TH}">状态</th><th style="${TH}">URL</th>` +
+        `<th style="${TH};text-align:right">耗时</th><th style="${TH};text-align:right">大小</th><th style="${TH}">时间</th>` +
+        `</tr></thead><tbody>${body.join('')}</tbody></table>`
+      : '<div style="color:var(--fg-muted);padding:6px">暂无数据</div>';
     nwCountEl.textContent = q ? `${shown}/${netEntries.length}` : `${netEntries.length}`;
   }
 
