@@ -114,12 +114,29 @@ async function flush(): Promise<void> {
   });
 }
 
+let curFps = 1;
+
+function reschedule(): void {
+  if (!flushTimer) return;
+  clearInterval(flushTimer);
+  flushTimer = setInterval(flush, Math.max(500, Math.round(1000 / curFps)));
+}
+
 export function startLogStream(fps = 1): void {
+  curFps = fps || 1;
   if (flushTimer) return;
   dirty = true; // push current backlog immediately
-  const interval = Math.max(500, Math.round(1000 / fps));
-  flushTimer = setInterval(flush, interval);
+  flushTimer = setInterval(flush, Math.max(500, Math.round(1000 / curFps)));
   flush();
+}
+
+// Change the flush rate of an already-running stream in place (viewer moved the
+// fps selector) — no stop/restart, so no fbDelete flicker.
+export function setLogFps(fps: number): void {
+  const f = fps || 1;
+  if (f === curFps) return;
+  curFps = f;
+  reschedule();
 }
 
 export function stopLogStream(): void {

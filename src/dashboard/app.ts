@@ -939,12 +939,22 @@ function showScreenModal(deviceId: string): void {
     <div class="modal" style="max-width:1180px;width:96%">
       <div class="modal-hdr">
         <h3>${esc(deviceId)}</h3>
+        <span id="conn-chip" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg-subtle);color:var(--fg-muted);white-space:nowrap">…</span>
         <button class="close" id="modal-close">✕</button>
       </div>
       <div class="modal-body" style="padding:12px;display:flex;gap:14px;align-items:flex-start">
 
         <div style="flex:0 0 auto;display:flex;flex-direction:column;min-width:280px">
-          <button id="screen-toggle" style="align-self:flex-start;margin-bottom:8px;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:5px 12px;cursor:pointer">▶ 开启屏幕流</button>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <button id="screen-toggle" style="background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:5px 12px;cursor:pointer">▶ 开启屏幕流</button>
+            <label style="font-size:11px;color:var(--fg-muted);display:flex;align-items:center;gap:4px">帧率
+              <select id="screen-fps" style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;color:var(--fg);padding:3px 4px;font-size:11px;cursor:pointer">
+                <option value="1">1 fps</option>
+                <option value="2">2 fps</option>
+                <option value="5">5 fps</option>
+              </select>
+            </label>
+          </div>
           <div id="screen-info" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;white-space:pre-wrap">屏幕流未开启 · 点上方按钮开启</div>
           <div id="screen-stage" style="border:1px solid var(--border);border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
           <img id="screen-img" style="display:none;max-width:100%;border:1px solid var(--border);border-radius:6px;background:var(--bg-subtle)" />
@@ -976,7 +986,10 @@ function showScreenModal(deviceId: string): void {
               <span id="log-count" style="font-size:11px;color:var(--fg-muted);white-space:nowrap"></span>
               <button id="log-clear" title="清空显示" style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:11px;padding:4px 8px;cursor:pointer">清空</button>
             </div>
-            <div id="log-list" style="height:280px;overflow:auto;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+            <div style="position:relative">
+              <div id="log-list" style="height:280px;overflow:auto;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:6px;font-family:'SF Mono',Consolas,monospace;font-size:11px;line-height:1.5"></div>
+              <button id="log-jump" style="display:none;position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:var(--accent);border:1px solid var(--accent);border-radius:12px;color:#fff;font-size:11px;padding:3px 12px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)">↓ 新日志</button>
+            </div>
           </div>
 
           <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -1012,9 +1025,11 @@ function showScreenModal(deviceId: string): void {
   const logFilterEl = document.getElementById('log-filter') as HTMLInputElement;
   const logLevelEl = document.getElementById('log-level') as HTMLSelectElement;
   const logCountEl = document.getElementById('log-count') as HTMLElement;
+  const logJumpEl = document.getElementById('log-jump') as HTMLButtonElement;
 
   let logEntries: Array<{ level: string; msg: string; ts: number }> = [];
   let logSeq = -1;
+  let logSeenLen = 0; // how many rows the user has scrolled past (for "N 条新")
 
   const LEVEL_COLOR: Record<string, string> = {
     error: 'var(--danger)', warn: 'var(--attention-fg)', info: 'var(--accent)', log: 'var(--fg)', debug: 'var(--fg-muted)',
@@ -1067,12 +1082,25 @@ function showScreenModal(deviceId: string): void {
     logListEl.innerHTML = `<div style="position:relative;height:${total * LOG_ROW_H}px">${rows.join('')}</div>`;
   }
 
+  function isLogAtBottom(): boolean {
+    return logListEl.scrollHeight - logListEl.scrollTop - logListEl.clientHeight < 24;
+  }
+
+  // Show a floating "↓ N 条新" pill when new lines land while the user is scrolled
+  // up; pinned-to-bottom users just follow the tail and see nothing.
+  function updateLogJump(atBottom: boolean): void {
+    if (atBottom) { logSeenLen = logFiltered.length; logJumpEl.style.display = 'none'; return; }
+    const n = logFiltered.length - logSeenLen;
+    if (n > 0) { logJumpEl.textContent = `↓ ${n} 条新`; logJumpEl.style.display = 'block'; }
+    else logJumpEl.style.display = 'none';
+  }
+
   function renderLogs(): void {
     const q = logSearchEl.value.trim();
     const onlyMatch = logFilterEl.checked;
     const lvl = logLevelEl.value;
     const ql = q.toLowerCase();
-    const atBottom = logListEl.scrollHeight - logListEl.scrollTop - logListEl.clientHeight < 24;
+    const atBottom = isLogAtBottom();
 
     logFiltered = [];
     for (const e of logEntries) {
@@ -1084,12 +1112,19 @@ function showScreenModal(deviceId: string): void {
     const shown = logFiltered.length;
     paintLogWindow();
     if (atBottom) { logListEl.scrollTop = logListEl.scrollHeight; paintLogWindow(); }
+    updateLogJump(atBottom);
     logCountEl.textContent = q || lvl ? `${shown}/${logEntries.length}` : `${logEntries.length}`;
   }
 
   logListEl.addEventListener('scroll', () => {
     if (logRaf) return;
-    logRaf = requestAnimationFrame(() => { logRaf = 0; paintLogWindow(); });
+    logRaf = requestAnimationFrame(() => { logRaf = 0; paintLogWindow(); updateLogJump(isLogAtBottom()); });
+  });
+  logJumpEl.addEventListener('click', () => {
+    logListEl.scrollTop = logListEl.scrollHeight;
+    logSeenLen = logFiltered.length;
+    logJumpEl.style.display = 'none';
+    paintLogWindow();
   });
 
   logSearchEl.addEventListener('input', renderLogs);
@@ -1640,8 +1675,10 @@ function showScreenModal(deviceId: string): void {
     syncTransport();
   });
 
+  let lastFrameAt = 0; // wall-clock of the last screen frame (drives the conn chip)
   async function handleScreen(data: any): Promise<void> {
     if (!data) return;
+    lastFrameAt = Date.now();
     if (data.kind === 'rrweb') {
       // Events arrive as a gzip'd (or, on old agents, plain) JSON string — the
       // tree store can't hold the deep event array. Un-gzip then parse; older
@@ -1691,6 +1728,33 @@ function showScreenModal(deviceId: string): void {
   // listener above renders them automatically whenever they arrive.
   let screenOn = false;
   const screenToggle = container.querySelector('#screen-toggle') as HTMLButtonElement;
+
+  // Frame-rate selector: just re-patches syncControl.fps; the agent reschedules
+  // its flush loops in place (no stream restart / no rrweb reset).
+  const fpsSel = container.querySelector('#screen-fps') as HTMLSelectElement;
+  fpsSel.addEventListener('change', () => {
+    fbPatch(`syncControl/${deviceId}`, { fps: parseInt(fpsSel.value, 10) || 1 });
+  });
+
+  // Connection freshness chip: device presence age + (while streaming) whether
+  // frames are still arriving, ticked once a second.
+  const connChip = container.querySelector('#conn-chip') as HTMLElement;
+  function updateConnChip(): void {
+    const dev = state.devices.find(d => d.deviceId === deviceId);
+    const now = Date.now();
+    const age = dev ? now - dev.lastSeen : Infinity;
+    let text: string, bg: string, fg: string;
+    if (age < 45000) { text = '● 在线'; bg = 'var(--success-subtle)'; fg = 'var(--success)'; }
+    else if (age < 90000) { text = `● ${formatAgo(dev!.lastSeen)}`; bg = 'var(--attention-subtle)'; fg = 'var(--attention-fg)'; }
+    else { text = dev ? `○ 离线 · ${formatAgo(dev.lastSeen)}` : '○ 离线'; bg = 'var(--bg-subtle)'; fg = 'var(--fg-muted)'; }
+    if (screenOn && lastFrameAt) text += (now - lastFrameAt) < 3000 ? ' · 实时' : ' · 画面卡顿';
+    connChip.textContent = text;
+    connChip.style.background = bg;
+    connChip.style.color = fg;
+  }
+  const connTimer = setInterval(updateConnChip, 1000);
+  updateConnChip();
+
   screenToggle.addEventListener('click', () => {
     screenOn = !screenOn;
     fbPatch(`syncControl/${deviceId}`, { screenSync: screenOn });
@@ -1711,6 +1775,7 @@ function showScreenModal(deviceId: string): void {
 
   const cleanup = () => {
     monSource.close();
+    clearInterval(connTimer);
     window.removeEventListener('resize', onResizeFit);
     stopRaf();
     if (replayer) { try { replayer.destroy(); } catch {} replayer = null; }

@@ -48,12 +48,27 @@ async function flush(): Promise<void> {
   });
 }
 
+let curFps = 1;
+
+function reschedule(): void {
+  if (!flushTimer) return;
+  clearInterval(flushTimer);
+  flushTimer = setInterval(flush, Math.max(1000, Math.round(1000 / curFps)));
+}
+
 export function startStorageStream(fps = 1): void {
+  curFps = fps || 1;
   if (flushTimer) return;
   lastHash = ''; // force an immediate first push
-  const interval = Math.max(1000, Math.round(1000 / fps));
-  flushTimer = setInterval(flush, interval);
+  flushTimer = setInterval(flush, Math.max(1000, Math.round(1000 / curFps)));
   flush();
+}
+
+export function setStorageFps(fps: number): void {
+  const f = fps || 1;
+  if (f === curFps) return;
+  curFps = f;
+  reschedule();
 }
 
 export function stopStorageStream(): void {

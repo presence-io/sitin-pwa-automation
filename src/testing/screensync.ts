@@ -3,14 +3,15 @@ import { loadRrweb } from '../shared/rrweb-loader';
 import { fbPut, fbGet, fbDelete, fbListen, type FbSub } from '../shared/firebase';
 import { packString } from '../shared/compress';
 import { getDeviceId } from './remote';
-import { startLogStream, stopLogStream } from './logsync';
-import { startStorageStream, stopStorageStream } from './storagesync';
-import { startNetworkStream, stopNetworkStream } from './networksync';
+import { startLogStream, stopLogStream, setLogFps } from './logsync';
+import { startStorageStream, stopStorageStream, setStorageFps } from './storagesync';
+import { startNetworkStream, stopNetworkStream, setNetworkFps } from './networksync';
 
 let stopRecordFn: (() => void) | null = null;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 let syncSource: FbSub | null = null;
 let starting = false;
+let curScreenFps = 1;
 
 // Whether a viewer is attached (syncControl.screenSync). Screen frames stream
 // through the backend to whoever is watching; there is no peer-to-peer path.
@@ -59,8 +60,8 @@ async function startRecording(fps = 1): Promise<void> {
     });
     stopRecordFn = stop ?? null;
 
-    const interval = Math.max(500, Math.round(1000 / fps));
-    flushTimer = setInterval(flush, interval);
+    curScreenFps = fps;
+    flushTimer = setInterval(flush, Math.max(500, Math.round(1000 / curScreenFps)));
     log('Screen sync started (rrweb, lazy-loaded)');
   } catch (e) {
     warn('Screen sync: rrweb load failed', e);
@@ -113,6 +114,18 @@ function stopRtdbSync(): void {
   maybeStopRecording();
 }
 
+// Change the recording flush rate in place while streaming (viewer moved the fps
+// selector) — the rrweb recording keeps running, only the flush interval changes.
+function setScreenFps(fps: number): void {
+  const f = fps || 1;
+  if (f === curScreenFps) return;
+  curScreenFps = f;
+  if (flushTimer) {
+    clearInterval(flushTimer);
+    flushTimer = setInterval(flush, Math.max(500, Math.round(1000 / curScreenFps)));
+  }
+}
+
 // ── Public API ──
 
 export function listenSyncControl(): void {
@@ -122,19 +135,21 @@ export function listenSyncControl(): void {
   syncSource = fbListen(`syncControl/${deviceId}`, async (pushed) => {
     try {
       const data = pushed !== undefined ? pushed : await fbGet<any>(`syncControl/${deviceId}`);
+      const fps = data?.fps || 1;
       // Logs + storage + network stream whenever a viewer is attached (screen
-      // sync or logs alone).
+      // sync or logs alone). start* no-ops if already running; set*Fps applies a
+      // changed rate in place.
       if (data?.screenSync || data?.logSync) {
-        startLogStream(data.fps || 1);
-        startStorageStream(data.fps || 1);
-        startNetworkStream(data.fps || 1);
+        startLogStream(fps); setLogFps(fps);
+        startStorageStream(fps); setStorageFps(fps);
+        startNetworkStream(fps); setNetworkFps(fps);
       } else {
         stopLogStream();
         stopStorageStream();
         stopNetworkStream();
       }
       if (data?.screenSync) {
-        startRtdbSync(data.fps || 1);
+        startRtdbSync(fps); setScreenFps(fps);
       } else {
         stopRtdbSync();
       }
