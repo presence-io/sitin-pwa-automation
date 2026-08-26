@@ -4,11 +4,21 @@ import { runAssert } from './assertion';
 import { resolveVariables, resolveActionVariables } from './variables';
 import { captureScreenshot } from './screenshot';
 import { callCleanupFunction } from './cleanup';
-import { waitForElement, executeStepAction } from '../teaching/player';
+import { waitForElement, executeStepAction, describeStepFailure } from '../teaching/player';
 import type { TestSuite, TestCase, TestAction, CaseResult, StepResult } from './types';
 import type { RecordingStep as PlayerStep } from '../teaching/store';
 
 export type RunnerStatusFn = (msg: string) => void;
+
+// ── Cancellation ──
+// A running suite polls this flag between steps/cases so a remote "abort" command
+// can stop it mid-flight instead of the loop running to completion. Reset at the
+// start of every runSuite so a stale abort never kills the next run.
+let cancelRequested = false;
+let running = false;
+
+export function cancelRun(): void { if (running) cancelRequested = true; }
+export function wasCancelled(): boolean { return cancelRequested; }
 
 function toPlayerStep(action: TestAction): PlayerStep {
   return {
@@ -56,7 +66,12 @@ async function runAction(action: TestAction, vars: Record<string, string>, stepI
       default: {
         const step = toPlayerStep(resolved);
         const ok = await executeStepAction(step);
-        return { action: resolved.action, status: ok ? 'ok' : 'fail', duration: Date.now() - start };
+        return {
+          action: resolved.action,
+          status: ok ? 'ok' : 'fail',
+          duration: Date.now() - start,
+          detail: ok ? undefined : describeStepFailure(step),
+        };
       }
     }
   } catch (e) {
@@ -68,9 +83,10 @@ async function runActions(
   actions: TestAction[],
   vars: Record<string, string>,
   startIndex: number,
-): Promise<{ steps: StepResult[]; failed: boolean; failedStep?: number }> {
+): Promise<{ steps: StepResult[]; failed: boolean; failedStep?: number; cancelled?: boolean }> {
   const steps: StepResult[] = [];
   for (let i = 0; i < actions.length; i++) {
+    if (cancelRequested) return { steps, failed: true, failedStep: startIndex + i, cancelled: true };
     const result = await runAction(actions[i], vars, startIndex + i);
     steps.push(result);
     if (result.status === 'fail') return { steps, failed: true, failedStep: startIndex + i };
@@ -99,7 +115,7 @@ async function runCase(testCase: TestCase, statusFn?: RunnerStatusFn): Promise<C
     if (r.failed) {
       caseStatus = 'failed';
       failedStep = r.failedStep;
-      error = `setup failed at step ${r.failedStep}`;
+      error = r.cancelled ? '已手动终止' : `setup failed at step ${r.failedStep}`;
     }
   }
 
@@ -111,8 +127,12 @@ async function runCase(testCase: TestCase, statusFn?: RunnerStatusFn): Promise<C
     if (r.failed) {
       caseStatus = 'failed';
       failedStep = r.failedStep;
-      error = r.steps.find(s => s.status === 'fail')?.detail;
-      screenshot = await captureScreenshot();
+      if (r.cancelled) {
+        error = '已手动终止';
+      } else {
+        error = r.steps.find(s => s.status === 'fail')?.detail;
+        screenshot = await captureScreenshot();
+      }
     }
   }
 
@@ -141,32 +161,39 @@ async function runCase(testCase: TestCase, statusFn?: RunnerStatusFn): Promise<C
 
 export async function runSuite(suite: TestSuite, statusFn?: RunnerStatusFn): Promise<CaseResult[]> {
   const results: CaseResult[] = [];
+  cancelRequested = false;
+  running = true;
 
-  if (suite.globalSetup?.length) {
-    statusFn?.('globalSetup...');
-    const r = await runActions(suite.globalSetup, {}, 0);
-    if (r.failed) {
-      warn('globalSetup failed, aborting suite');
-      return results;
+  try {
+    if (suite.globalSetup?.length) {
+      statusFn?.('globalSetup...');
+      const r = await runActions(suite.globalSetup, {}, 0);
+      if (r.failed) {
+        warn(r.cancelled ? 'globalSetup aborted' : 'globalSetup failed, aborting suite');
+        return results;
+      }
     }
-  }
 
-  for (let i = 0; i < suite.cases.length; i++) {
-    const tc = suite.cases[i];
-    statusFn?.(`(${i + 1}/${suite.cases.length}) ${tc.name}`);
-    const result = await runCase(tc, statusFn);
-    results.push(result);
-    log(`[${result.status}] ${tc.name} (${result.duration}ms)`);
-  }
-
-  if (suite.globalTeardown?.length) {
-    statusFn?.('globalTeardown...');
-    try {
-      await runActions(suite.globalTeardown, {}, 0);
-    } catch (e) {
-      warn('globalTeardown error (ignored):', e);
+    for (let i = 0; i < suite.cases.length; i++) {
+      if (cancelRequested) { log('Suite aborted by request'); break; }
+      const tc = suite.cases[i];
+      statusFn?.(`(${i + 1}/${suite.cases.length}) ${tc.name}`);
+      const result = await runCase(tc, statusFn);
+      results.push(result);
+      log(`[${result.status}] ${tc.name} (${result.duration}ms)`);
     }
-  }
 
-  return results;
+    if (suite.globalTeardown?.length && !cancelRequested) {
+      statusFn?.('globalTeardown...');
+      try {
+        await runActions(suite.globalTeardown, {}, 0);
+      } catch (e) {
+        warn('globalTeardown error (ignored):', e);
+      }
+    }
+
+    return results;
+  } finally {
+    running = false;
+  }
 }

@@ -1,7 +1,7 @@
 import { log, warn } from '../core/helpers';
 import { setConn } from '../core/bus';
 import { configManager } from './config';
-import { runSuite } from './runner';
+import { runSuite, cancelRun, wasCancelled } from './runner';
 import { generateReport, printReportToConsole } from './reporter';
 import { fetchRemoteSuite } from './repository';
 import { runStage, runAllStages, STAGES } from '../stages/runner';
@@ -32,6 +32,13 @@ function setDeviceId(id: string): void {
   localStorage.setItem('autobot_device_id', id);
 }
 
+// Optional human-friendly name for this device, set from the panel. Sent with
+// every register/heartbeat so the dashboard can show "我的红米" instead of a
+// random id. Empty string means "no label" (dashboard falls back to deviceId).
+function getDeviceLabel(): string {
+  return localStorage.getItem('autobot_device_label') || '';
+}
+
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let eventSource: EventSource | null = null;
 let sseHealthTimer: ReturnType<typeof setInterval> | null = null;
@@ -46,6 +53,8 @@ async function registerDevice(): Promise<void> {
     status: 'online',
     lastSeen: Date.now(),
     userAgent: navigator.userAgent,
+    label: getDeviceLabel(),
+    title: document.title,
   };
   await fbPut(`devices/${deviceId}`, info);
   log('Device registered:', deviceId);
@@ -62,6 +71,8 @@ async function sendHeartbeat(): Promise<void> {
       lastSeen: Date.now(),
       project: configManager.getProject(),
       userAgent: navigator.userAgent,
+      label: getDeviceLabel(),
+      title: document.title,
     });
     setConn('online');
   } catch {
@@ -204,7 +215,7 @@ async function executeRemoteCommand(cmd: RemoteCommand): Promise<void> {
     const report = generateReport(suite.name, results);
     printReportToConsole(report);
 
-    const finalStatus = report.summary.failed > 0 ? 'failed' : 'completed';
+    const finalStatus = wasCancelled() ? 'aborted' : (report.summary.failed > 0 ? 'failed' : 'completed');
     await reportProgress(cmd.id, {
       status: finalStatus,
       summary: report.summary,
@@ -275,7 +286,11 @@ async function startRemote(): Promise<void> {
   startHeartbeat();
   listenForCommands();
   onRemoteCommand((cmd) => {
-    if (cmd.action === 'stage') executeStageCommand(cmd);
+    if (cmd.action === 'abort') {
+      log('Abort requested:', cmd.id);
+      cancelRun();
+      fbPatch(`commands/${cmd.id}`, { status: 'completed' }).catch(() => {});
+    } else if (cmd.action === 'stage') executeStageCommand(cmd);
     else executeRemoteCommand(cmd);
   });
   cleanOldCommands().catch(() => {});

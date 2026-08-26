@@ -68,6 +68,8 @@ export interface DeviceInfo {
   status: 'online' | 'offline';
   lastSeen: number;
   userAgent: string;
+  label?: string;   // user-given name (device-owned, editable from the panel)
+  title?: string;   // current page title, so you can tell devices apart
 }
 
 export interface RemoteCommand {
@@ -78,14 +80,14 @@ export interface RemoteCommand {
   suite: string;
   suiteData?: any;
   stageIndex?: number;  // for action:'stage', -1 = run all
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
   createdBy?: string;
   createdAt: number;
   result?: any;
 }
 
 export interface CommandProgress {
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'aborted';
   progress?: { current: number; total: number; currentCase: string };
   summary?: { total: number; passed: number; failed: number; skipped: number };
   duration?: number;

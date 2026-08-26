@@ -12,6 +12,7 @@ import { createTeachingUI } from '../teaching/ui';
 import { createTestingUI } from '../testing/ui';
 import { onConn, onLog, getLogs, type ConnState, type LogLine } from '../core/bus';
 import { configManager } from '../testing/config';
+import { fbPatch } from '../shared/firebase';
 import { CSS } from './styles';
 
 let panelEl: HTMLElement | null = null;
@@ -106,7 +107,11 @@ function togglePanel() {
 function refreshInfo() {
   if (!panelEl) return;
   const meta = panelEl.querySelector('#conn-meta');
-  if (meta) meta.textContent = `${configManager.getProject()} · ${localStorage.getItem('autobot_device_id') || '?'}`;
+  if (meta) {
+    const id = localStorage.getItem('autobot_device_id') || '?';
+    const label = localStorage.getItem('autobot_device_label') || '';
+    meta.textContent = `${configManager.getProject()} · ${label || id}`;
+  }
   const el = panelEl.querySelector('#user-info');
   if (!el) return;
   const s = getAuth();
@@ -209,6 +214,25 @@ export function createPanel() {
   });
 
   p.querySelector('#btn-close')!.addEventListener('click', togglePanel);
+
+  // Click the connection meta line to name this device (surfaced in the dashboard
+  // so devices aren't just random ids like "iPhone-a3f2").
+  const connMeta = p.querySelector('#conn-meta') as HTMLElement;
+  if (connMeta) {
+    connMeta.style.cursor = 'pointer';
+    connMeta.title = '点击给这台设备起名';
+    connMeta.addEventListener('click', () => {
+      const id = localStorage.getItem('autobot_device_id') || '';
+      const cur = localStorage.getItem('autobot_device_label') || '';
+      const name = prompt('给这台设备起个名字（方便在控制台识别）', cur);
+      if (name === null) return;
+      const v = name.trim();
+      if (v) localStorage.setItem('autobot_device_label', v);
+      else localStorage.removeItem('autobot_device_label');
+      if (id) fbPatch(`devices/${id}`, { label: v }).catch(() => {});
+      refreshInfo();
+    });
+  }
 
   // Config bindings
   const bind = (id: string, key: keyof typeof CFG) =>

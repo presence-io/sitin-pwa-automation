@@ -49,6 +49,7 @@ svg{display:block;flex-shrink:0}
 .status-dot.passed{background:var(--success)}
 .status-dot.failed{background:var(--danger)}
 .status-dot.running{background:var(--attention-fg)}
+.status-dot.aborted{background:var(--fg-subtle)}
 
 /* ── 顶栏 ── */
 .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 22px;background:var(--surface);border-bottom:1px solid var(--border)}
@@ -111,6 +112,7 @@ svg{display:block;flex-shrink:0}
 .result-item.passed{border-left-color:var(--success)}
 .result-item.failed{border-left-color:var(--danger)}
 .result-item.running{border-left-color:var(--attention-fg)}
+.result-item.aborted{border-left-color:var(--fg-subtle)}
 
 .empty{text-align:center;padding:22px 12px;color:var(--fg-subtle);font-size:13px;line-height:1.6}
 .empty a{cursor:pointer;font-weight:600}
@@ -185,6 +187,7 @@ svg{display:block;flex-shrink:0}
         <span class="step"><span class="num">3</span>运行</span>
       </div>
       <button class="btn btn-success btn-lg" id="btn-run" disabled>▶ 运行选中用例</button>
+      <button class="btn btn-danger btn-lg" id="btn-stop" style="display:none">■ 停止</button>
       <span class="runbar-status" id="run-status"></span>
     </div>
 

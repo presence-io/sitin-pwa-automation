@@ -157,6 +157,57 @@ export async function executeStepAction(step: RecordingStep): Promise<boolean> {
   }
 }
 
+// Levenshtein distance, capped scan — used only on the failure path to suggest
+// the on-screen text closest to what the step was looking for.
+function lev(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+function nearestVisibleText(target: string): string | null {
+  if (!target) return null;
+  const t0 = target.slice(0, 40);
+  const els = document.querySelectorAll('button, a, [role="button"], input, span, li');
+  let best: string | null = null, bestScore = Infinity, scanned = 0;
+  for (const el of els) {
+    if (scanned > 500) break;
+    if (!isVisible(el) || isAutobotElement(el)) continue;
+    const t = ((el.textContent || (el as HTMLInputElement).placeholder || '').trim());
+    if (!t || t.length > 40) continue;
+    scanned++;
+    const d = lev(t, t0);
+    if (d < bestScore) { bestScore = d; best = t; }
+  }
+  return best && bestScore <= Math.max(3, Math.ceil(t0.length * 0.5)) ? best : null;
+}
+
+// Human-readable reason a click/input/select step failed to find its element,
+// so a failed report says *why* (which locators were tried, the text hint, and
+// the closest on-screen text) instead of a bare ✗.
+export function describeStepFailure(step: RecordingStep): string {
+  const tried = (step.locators ?? []).map(l => `${l.type}=${l.value}`);
+  const parts: string[] = [`未找到元素(${step.type})`];
+  parts.push(tried.length
+    ? `已试 ${tried.length} 个定位器: ${tried.slice(0, 4).join(' | ')}${tried.length > 4 ? ' …' : ''}`
+    : '该步无定位器');
+  if (step.textHint) {
+    parts.push(`textHint="${step.textHint}"`);
+    const near = nearestVisibleText(step.textHint);
+    if (near && near !== step.textHint) parts.push(`页面最接近文本: "${near}"`);
+  }
+  return parts.join('; ');
+}
+
 export class Player {
   private playing = false;
   private paused = false;

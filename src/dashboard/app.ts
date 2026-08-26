@@ -38,6 +38,7 @@ interface DashboardState {
   firebaseRecordings: any[];
   selectedSuite: number;
   activeCmd: string | null;
+  activeTargets: string[];
   results: Map<string, CommandProgress>;
   history: RemoteCommand[];
   screenViewers: Map<string, EventSource>;
@@ -53,6 +54,7 @@ const state: DashboardState = {
   firebaseRecordings: [],
   selectedSuite: -1,
   activeCmd: null,
+  activeTargets: [],
   results: new Map(),
   history: [],
   screenViewers: new Map(),
@@ -124,12 +126,15 @@ function renderDevices(): void {
     const statusClass = d.status === 'online' ? 'online' : 'offline';
     const ago = d.status === 'online' ? '' : ` · ${formatAgo(d.lastSeen)}`;
     const ua = shortenUA(d.userAgent);
+    const displayName = d.label || d.deviceId;
+    const idHint = d.label ? ` <span style="font-size:10px;color:var(--fg-subtle);font-weight:400">${esc(d.deviceId)}</span>` : '';
+    const page = d.title ? ` · <span title="${esc(d.title)}">${esc(d.title.slice(0, 24))}</span>` : '';
     return `<div class="device-card">
       <input type="checkbox" data-device="${esc(d.deviceId)}" ${checked} ${d.status === 'offline' ? 'disabled' : ''}>
       <div class="dot ${statusClass}"></div>
       <div class="info">
-        <div class="name">${esc(d.deviceId)}</div>
-        <div class="meta">${d.project ? esc(d.project) : '未指定项目'} · ${esc(ua)}${ago}</div>
+        <div class="name">${esc(displayName)}${idHint}</div>
+        <div class="meta">${d.project ? esc(d.project) : '未指定项目'} · ${esc(ua)}${page}${ago}</div>
       </div>
       ${d.status === 'online' ? `<button class="preview-btn btn-screen" data-device="${esc(d.deviceId)}" title="查看屏幕"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>` : ''}
       <button class="preview-btn btn-del-device" data-device="${esc(d.deviceId)}" title="删除设备" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
@@ -349,10 +354,32 @@ async function runOnDevices(): Promise<void> {
 
   await fbPut(`commands/${id}`, cmd);
   state.activeCmd = id;
+  state.activeTargets = targets;
   state.results.clear();
   renderResults();
   startResultsListener(id);
   document.getElementById('run-status')!.textContent = `已下发到 ${targets.length} 台设备…`;
+}
+
+// Send an abort command to the devices of the active run. The device's remote
+// listener flips the runner's cancel flag, stopping it between steps.
+async function abortRun(): Promise<void> {
+  if (!state.activeCmd || state.activeTargets.length === 0) return;
+  const stopBtn = document.getElementById('btn-stop') as HTMLButtonElement | null;
+  if (stopBtn) stopBtn.disabled = true;
+  const id = `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const cmd: RemoteCommand = {
+    id,
+    targets: [...state.activeTargets],
+    action: 'abort',
+    project: state.project ?? '',
+    suite: '',
+    status: 'pending',
+    createdBy: 'dashboard',
+    createdAt: Date.now(),
+  };
+  await fbPut(`commands/${id}`, cmd);
+  document.getElementById('run-status')!.textContent = '已发送停止指令…';
 }
 
 function startResultsListener(cmdId: string): void {
@@ -392,6 +419,9 @@ function renderResults(): void {
     } else if (r.status === 'failed') {
       cls = 'failed';
       detail = r.summary ? `通过 ${r.summary.passed}/${r.summary.total}，失败 ${r.summary.failed}` : '失败';
+    } else if (r.status === 'aborted') {
+      cls = 'aborted';
+      detail = r.summary ? `已终止（通过 ${r.summary.passed}/${r.summary.total}）` : '已终止';
     }
 
     return `<div class="result-item ${cls}">
@@ -409,6 +439,17 @@ function renderResults(): void {
       if (r?.report) showReportModal(deviceId, r.report);
     });
   });
+
+  // Show the stop button while a run is live (dispatched or any device still
+  // running); hide it once every device has reached a terminal state.
+  const stopBtn = document.getElementById('btn-stop') as HTMLButtonElement | null;
+  if (stopBtn) {
+    const values = [...state.results.values()];
+    const allTerminal = values.length > 0 && values.every(r => r.status !== 'running');
+    const live = !!state.activeCmd && !allTerminal;
+    stopBtn.style.display = live ? '' : 'none';
+    if (live && values.some(r => r.status === 'running')) stopBtn.disabled = false;
+  }
 }
 
 // ── History ──
@@ -429,12 +470,12 @@ function renderHistory(): void {
     return;
   }
 
-  const statusLabel: Record<string, string> = { completed: '完成', failed: '失败', running: '运行中', pending: '待执行' };
+  const statusLabel: Record<string, string> = { completed: '完成', failed: '失败', running: '运行中', pending: '待执行', aborted: '已终止' };
   el.innerHTML = state.history.map(cmd => {
-    const dotCls = cmd.status === 'completed' ? 'passed' : cmd.status === 'failed' ? 'failed' : 'running';
+    const dotCls = cmd.status === 'completed' ? 'passed' : cmd.status === 'failed' ? 'failed' : cmd.status === 'aborted' ? 'aborted' : 'running';
     const targets = cmd.targets?.join(', ') || (cmd as any).targetDevice || '?';
     const time = new Date(cmd.createdAt).toLocaleString();
-    const isDone = cmd.status === 'completed' || cmd.status === 'failed';
+    const isDone = cmd.status === 'completed' || cmd.status === 'failed' || cmd.status === 'aborted';
     return `<div class="result-item ${dotCls}">
       <span class="status-dot ${dotCls}"></span>
       <span class="device">${esc(targets)}</span>
@@ -2019,6 +2060,7 @@ async function restoreLastResults(): Promise<void> {
     const data = await fbGet<Record<string, any>>(`results/${cmd.id}`);
     if (data && Object.keys(data).length > 0) {
       state.activeCmd = cmd.id;
+      state.activeTargets = cmd.targets ?? [];
       state.results = new Map(Object.entries(data));
       renderResults();
       // If still running, keep listening
@@ -2145,6 +2187,7 @@ async function init(): Promise<void> {
     await refreshHistory();
   });
   document.getElementById('btn-run')!.addEventListener('click', runOnDevices);
+  document.getElementById('btn-stop')?.addEventListener('click', abortRun);
   document.getElementById('btn-connect-help')!.addEventListener('click', showConnectHelp);
   document.getElementById('btn-guide')!.addEventListener('click', showGuide);
   document.getElementById('btn-paste')!.addEventListener('click', showPasteModal);
