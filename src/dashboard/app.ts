@@ -190,7 +190,7 @@ async function deleteDevice(deviceId: string): Promise<void> {
 
   await Promise.all([
     fbDelete(`devices/${deviceId}`),
-    fbDelete(`mon/${deviceId}`),
+    fbDelete(`screens/${deviceId}`),
     fbDelete(`syncControl/${deviceId}`),
   ]);
 }
@@ -1620,14 +1620,16 @@ function showScreenModal(deviceId: string): void {
   }
 
   // ── One SSE per device. firebaseio is HTTP/1.1 (≤6 connections per host), so
-  // watching screens/logs/storage/network as four separate streams would eat the
-  // pool and starve a second open panel. The agent writes everything under
-  // mon/{id}/* and we watch mon/{id} once, dispatching each child to its handler.
+  // watching screen/logs/storage/network as four separate streams would eat the
+  // pool and starve a second open panel. The agent writes all four under
+  // screens/{id}/{screen|logs|network|storage} and we watch screens/{id} once,
+  // dispatching each child to its handler. (screens is reused as the shared
+  // parent because RTDB rules already whitelist it — a new top-level node 401s.)
   // The inline mirror preserves child identity, so a screen frame only re-runs
   // handleScreen — logs/storage/network stay untouched (ref-equal → skipped). ──
   let lastScreen: any, lastLogs: any, lastStorage: any, lastNetwork: any;
-  const monSource = fbListen(`mon/${deviceId}`, async (pushed) => {
-    const m = (pushed !== undefined ? pushed : await fbGet<any>(`mon/${deviceId}`)) || {};
+  const monSource = fbListen(`screens/${deviceId}`, async (pushed) => {
+    const m = (pushed !== undefined ? pushed : await fbGet<any>(`screens/${deviceId}`)) || {};
     if (m.logs !== lastLogs)       { lastLogs = m.logs;       if (m.logs)    handleLogs(m.logs); }
     if (m.storage !== lastStorage) { lastStorage = m.storage; if (m.storage) handleStorage(m.storage); }
     if (m.network !== lastNetwork) { lastNetwork = m.network; if (m.network) handleNetwork(m.network); }

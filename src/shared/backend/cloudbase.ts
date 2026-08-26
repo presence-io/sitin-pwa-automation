@@ -16,7 +16,7 @@ import type { Backend, FbSub } from './types';
 // Self-hosted on the Pages origin (same as rrweb) and inline-injected so strict
 // PWA CSPs that block external <script src> still allow it. Exposes window.cloudbase.
 const SDK_URL = 'https://presence-io.github.io/sitin-pwa-automation/cloudbase.full.js';
-const TWO_LEVEL = new Set(['results', 'rtc', 'suites', 'recordings', 'mon']);
+const TWO_LEVEL = new Set(['results', 'rtc', 'suites', 'recordings', 'screens']);
 
 type CB = any;
 

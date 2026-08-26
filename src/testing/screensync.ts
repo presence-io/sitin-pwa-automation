@@ -86,7 +86,7 @@ async function flush(): Promise<void> {
   // the 32-level depth / forbidden-key limits that 400 the write). A single
   // last-write-wins key can't carry deltas, so it stays full each flush.
   const deviceId = getDeviceId();
-  await fbPut(`mon/${deviceId}/screen`, {
+  await fbPut(`screens/${deviceId}/screen`, {
     kind: 'rrweb',
     bufferId,
     events: JSON.stringify(buffer),
@@ -106,7 +106,7 @@ function startRtdbSync(fps = 1): void {
 function stopRtdbSync(): void {
   rtdbActive = false;
   const deviceId = getDeviceId();
-  fbDelete(`mon/${deviceId}/screen`);
+  fbDelete(`screens/${deviceId}/screen`);
   maybeStopRecording();
 }
 
@@ -142,7 +142,7 @@ export function listenSyncControl(): void {
 export function cleanupSync(): void {
   rtdbActive = false;
   const deviceId = getDeviceId();
-  fbDelete(`mon/${deviceId}/screen`);
+  fbDelete(`screens/${deviceId}/screen`);
   maybeStopRecording();
   stopLogStream();
   stopStorageStream();
