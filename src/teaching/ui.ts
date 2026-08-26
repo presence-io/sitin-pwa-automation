@@ -251,14 +251,16 @@ export function createTeachingUI(container: Element) {
       onPick(null);
     });
 
-    // Auto-dismiss after 5 seconds (skip)
+    // Auto-dismiss after 12s (was 5s — too short, a moment's hesitation silently
+    // dropped the text choice down to a brittle CSS selector). Warn when it fires.
     setTimeout(() => {
       if (!picked) {
         picked = true;
         popup?.remove();
+        warn('文本选择超时，沿用自动识别的定位器');
         onPick(null);
       }
-    }, 5000);
+    }, 12000);
   }
 
   // ── Assert popup during recording ──

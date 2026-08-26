@@ -1,4 +1,4 @@
-import { log, warn, sleep, typeInto, spaNav } from '../core/helpers';
+import { log, warn, sleep, typeInto, spaNav, waitForIdle } from '../core/helpers';
 import type { RecordingStep, Locator } from './store';
 
 export type PlayerStatusFn = (msg: string) => void;
@@ -114,14 +114,14 @@ export async function executeStepAction(step: RecordingStep): Promise<boolean> {
   switch (step.type) {
     case 'navigate':
       if (step.url) spaNav(step.url);
-      await sleep(1500);
+      await waitForIdle(2500, 250);
       return true;
 
     case 'click': {
       const el = await waitForElement(step);
       if (!el) return false;
       (el as HTMLElement).click();
-      await sleep(500);
+      await waitForIdle(1200, 150);
       return true;
     }
 
@@ -147,9 +147,16 @@ export async function executeStepAction(step: RecordingStep): Promise<boolean> {
       return true;
     }
 
-    case 'scroll':
+    case 'scroll': {
+      // Prefer scrolling a recorded anchor element into view (survives content
+      // that shifted the absolute offset); fall back to the absolute position.
+      if (step.locators && step.locators.length) {
+        const el = findElementByStep(step);
+        if (el) { (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'auto' }); return true; }
+      }
       window.scrollTo(step.scrollX || 0, step.scrollY || 0);
       return true;
+    }
 
     default:
       warn('Unknown step type:', step.type);

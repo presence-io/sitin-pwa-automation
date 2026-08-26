@@ -145,6 +145,17 @@ function generateLocators(el: Element): Locator[] {
   return locators;
 }
 
+// The element at the viewport centre when a scroll settles — used as a stable
+// anchor so replay can scroll it back into view even if content above it changed
+// the absolute offset. Only returns an anchor with a semantic (non-CSS) locator.
+function scrollAnchor(): { locators: Locator[]; tag: string; textHint?: string } | null {
+  const el = document.elementFromPoint(Math.round(window.innerWidth / 2), Math.round(window.innerHeight / 2));
+  if (!el || el === document.body || el === document.documentElement || isAutobotElement(el)) return null;
+  const locators = generateLocators(el);
+  if (!locators.some(l => l.type !== 'css')) return null;
+  return { locators, tag: el.tagName.toLowerCase(), textHint: el.textContent?.trim().slice(0, 80) || undefined };
+}
+
 export type OnStepCallback = (step: RecordingStep) => void;
 export type TextPickerCallback = (texts: string[], onPick: (text: string | null) => void) => void;
 
@@ -164,6 +175,8 @@ export class Recorder {
   private onTextPick: TextPickerCallback | null = null;
   private abortController: AbortController | null = null;
   private lastUrl = '';
+  private origPushState: History['pushState'] | null = null;
+  private origReplaceState: History['replaceState'] | null = null;
 
   get isRecording() { return this.recording; }
   get stepCount() { return this.steps.length; }
@@ -200,6 +213,7 @@ export class Recorder {
     document.addEventListener('change', this.handleChange, { capture: true, signal });
     window.addEventListener('popstate', this.handleNav, { signal });
     window.addEventListener('scroll', this.handleScroll, { capture: true, passive: true, signal } as any);
+    this.patchHistory();
 
     log('Recorder started');
   }
@@ -209,8 +223,34 @@ export class Recorder {
     this.recording = false;
     this.abortController?.abort();
     this.abortController = null;
+    this.unpatchHistory();
     log('Recorder stopped,', this.steps.length, 'steps');
     return [...this.steps];
+  }
+
+  // SPA routers navigate via history.pushState/replaceState, which do NOT fire
+  // popstate — so those navigations were being missed. Wrap them to also record.
+  private patchHistory() {
+    if (this.origPushState) return;
+    const rec = this;
+    this.origPushState = history.pushState;
+    this.origReplaceState = history.replaceState;
+    history.pushState = function (...args: Parameters<History['pushState']>) {
+      const r = rec.origPushState!.apply(this, args);
+      rec.handleNav();
+      return r;
+    };
+    history.replaceState = function (...args: Parameters<History['replaceState']>) {
+      const r = rec.origReplaceState!.apply(this, args);
+      rec.handleNav();
+      return r;
+    };
+  }
+
+  private unpatchHistory() {
+    if (this.origPushState) history.pushState = this.origPushState;
+    if (this.origReplaceState) history.replaceState = this.origReplaceState;
+    this.origPushState = this.origReplaceState = null;
   }
 
   private addStep(step: RecordingStep) {
@@ -314,10 +354,12 @@ export class Recorder {
     if (this.scrollTimer) clearTimeout(this.scrollTimer);
     this.scrollTimer = setTimeout(() => {
       if (!this.recording) return;
+      const anchor = scrollAnchor();
       this.addStep({
         type: 'scroll',
-        locators: [],
-        tag: '',
+        locators: anchor?.locators ?? [],
+        tag: anchor?.tag ?? '',
+        textHint: anchor?.textHint,
         scrollX: Math.round(window.scrollX),
         scrollY: Math.round(window.scrollY),
         delay: 0,

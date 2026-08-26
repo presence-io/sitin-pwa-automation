@@ -1,4 +1,4 @@
-import { sleep, log, warn } from '../core/helpers';
+import { sleep, log, warn, waitForIdle } from '../core/helpers';
 import { tracker } from './tracker';
 import { runAssert } from './assertion';
 import { resolveVariables, resolveActionVariables } from './variables';
@@ -90,7 +90,7 @@ async function runActions(
     const result = await runAction(actions[i], vars, startIndex + i);
     steps.push(result);
     if (result.status === 'fail') return { steps, failed: true, failedStep: startIndex + i };
-    await sleep(300);
+    await waitForIdle(600, 120);
   }
   return { steps, failed: false };
 }

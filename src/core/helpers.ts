@@ -2,6 +2,23 @@ import { pushLog } from './bus';
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+// Wait until the DOM stops changing for `quietMs`, capped at `maxMs`. Lets a step
+// proceed the moment the page settles instead of a blanket sleep — fast when the
+// page is idle, patient while content is still loading. Only structural mutations
+// (childList/subtree) count, so CSS animations and ticking clocks don't keep it busy.
+export function waitForIdle(maxMs = 1000, quietMs = 150): Promise<void> {
+  return new Promise((resolve) => {
+    if (!document.body) { setTimeout(resolve, quietMs); return; }
+    let quiet: ReturnType<typeof setTimeout>;
+    let cap: ReturnType<typeof setTimeout>;
+    const done = () => { obs.disconnect(); clearTimeout(quiet); clearTimeout(cap); resolve(); };
+    const obs = new MutationObserver(() => { clearTimeout(quiet); quiet = setTimeout(done, quietMs); });
+    obs.observe(document.body, { childList: true, subtree: true });
+    quiet = setTimeout(done, quietMs);
+    cap = setTimeout(done, maxMs);
+  });
+}
+
 export const log = (...a: unknown[]) => {
   console.log('%c[AutoBot]', 'color:#00bcd4;font-weight:bold', ...a);
   pushLog('info', a);
