@@ -86,15 +86,24 @@ let devicesDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function startDeviceListener(): void {
   if (devicesSource) devicesSource.close();
-  devicesSource = fbListen('devices', () => {
+  devicesSource = fbListen('devices', (pushed) => {
+    // Coalesce bursts, but use the SSE payload when the backend delivers it
+    // inline (firebase) — re-reading 'devices' on every heartbeat was itself a
+    // request pile. Fall back to a fetch only for backends that just ping.
     if (devicesDebounceTimer) clearTimeout(devicesDebounceTimer);
-    devicesDebounceTimer = setTimeout(() => refreshDevices(), 2000);
+    devicesDebounceTimer = setTimeout(() => {
+      if (pushed !== undefined) applyDevices(pushed as Record<string, DeviceInfo>);
+      else refreshDevices();
+    }, 2000);
   });
   refreshDevices();
 }
 
 async function refreshDevices(): Promise<void> {
-  const data = await fbGet<Record<string, DeviceInfo>>('devices');
+  applyDevices(await fbGet<Record<string, DeviceInfo>>('devices'));
+}
+
+function applyDevices(data: Record<string, DeviceInfo> | null): void {
   if (!data) { state.devices = []; renderDevices(); return; }
   const cutoff = Date.now() - 90000;
   // Skip malformed records (a heartbeat patch after a device delete can recreate
@@ -920,9 +929,10 @@ function showPasteModal(): void {
 
 function showScreenModal(deviceId: string): void {
   ensureRrwebCss();
-  // Ask the agent to stream screen frames (rrweb windows) + logs through the
-  // backend for as long as this viewer is open.
-  fbPut(`syncControl/${deviceId}`, { screenSync: true, logSync: true, fps: 1 });
+  // Logs/network/storage (lightweight) stream while this viewer is open. Screen
+  // frames — the heavy rrweb stream — start OFF; the user flips them on with the
+  // toggle only when actually watching, so a panel that's just open stays cheap.
+  fbPut(`syncControl/${deviceId}`, { screenSync: false, logSync: true, fps: 1 });
 
   const container = document.getElementById('modal-container')!;
   container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
@@ -934,7 +944,8 @@ function showScreenModal(deviceId: string): void {
       <div class="modal-body" style="padding:12px;display:flex;gap:14px;align-items:flex-start">
 
         <div style="flex:0 0 auto;display:flex;flex-direction:column;min-width:280px">
-          <div id="screen-info" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;white-space:pre-wrap">Connecting...</div>
+          <button id="screen-toggle" style="align-self:flex-start;margin-bottom:8px;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:5px 12px;cursor:pointer">▶ 开启屏幕流</button>
+          <div id="screen-info" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;white-space:pre-wrap">屏幕流未开启 · 点上方按钮开启</div>
           <div id="screen-stage" style="border:1px solid var(--border);border-radius:6px;background:#fff;overflow:hidden;min-height:200px"></div>
           <img id="screen-img" style="display:none;max-width:100%;border:1px solid var(--border);border-radius:6px;background:var(--bg-subtle)" />
 
@@ -1622,7 +1633,35 @@ function showScreenModal(deviceId: string): void {
     });
     state.screenViewers.set(deviceId, screenSource);
   }
-  startScreenStream();
+  function stopScreenStream(): void {
+    if (screenSource) { screenSource.close(); screenSource = null; }
+    state.screenViewers.delete(deviceId);
+  }
+
+  // Screen stream is a manual toggle (default off). Flipping it tells the agent
+  // to start/stop recording via syncControl.screenSync AND attaches/detaches our
+  // listener — so no rrweb frames flow until you actually want to watch.
+  let screenOn = false;
+  const screenToggle = container.querySelector('#screen-toggle') as HTMLButtonElement;
+  screenToggle.addEventListener('click', () => {
+    screenOn = !screenOn;
+    fbPatch(`syncControl/${deviceId}`, { screenSync: screenOn });
+    if (screenOn) {
+      startScreenStream();
+      screenToggle.textContent = '⏸ 关闭屏幕流';
+      screenToggle.style.background = 'var(--bg-subtle)';
+      screenToggle.style.color = 'var(--fg)';
+      screenToggle.style.borderColor = 'var(--border)';
+      infoEl.textContent = 'Connecting…';
+    } else {
+      stopScreenStream();
+      screenToggle.textContent = '▶ 开启屏幕流';
+      screenToggle.style.background = 'var(--accent)';
+      screenToggle.style.color = '#fff';
+      screenToggle.style.borderColor = 'var(--accent)';
+      infoEl.textContent = '屏幕流已关闭 · 画面停在最后一帧';
+    }
+  });
 
   const cleanup = () => {
     if (screenSource) { screenSource.close(); screenSource = null; }
