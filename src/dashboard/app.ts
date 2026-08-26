@@ -1,9 +1,8 @@
 import {
-  DB_URL, fbPut, fbGet, fbPatch, fbDelete, fbListen,
-  type DeviceInfo, type RemoteCommand, type CommandProgress,
+  fbPut, fbGet, fbPatch, fbDelete, fbListen,
+  type FbSub, type DeviceInfo, type RemoteCommand, type CommandProgress,
 } from '../shared/firebase';
 import { loadRrweb } from '../shared/rrweb-loader';
-import { getRtcConfig, waitIceComplete, Reassembler } from '../shared/webrtc';
 
 // Minimal rrweb replay styles (the base Replayer renders into an iframe; these
 // only cover the wrapper + cursor so we don't need the full rrweb stylesheet).
@@ -41,7 +40,7 @@ interface DashboardState {
   activeTargets: string[];
   results: Map<string, CommandProgress>;
   history: RemoteCommand[];
-  screenViewers: Map<string, EventSource>;
+  screenViewers: Map<string, FbSub>;
 }
 
 const state: DashboardState = {
@@ -60,8 +59,8 @@ const state: DashboardState = {
   screenViewers: new Map(),
 };
 
-let devicesSource: EventSource | null = null;
-let resultsSource: EventSource | null = null;
+let devicesSource: FbSub | null = null;
+let resultsSource: FbSub | null = null;
 
 // ── Firebase helpers ──
 
@@ -921,9 +920,9 @@ function showPasteModal(): void {
 
 function showScreenModal(deviceId: string): void {
   ensureRrwebCss();
-  // Start with logs only — screen frames go peer-to-peer over WebRTC, so we
-  // don't ask the agent to write screens/ to the database unless WebRTC fails.
-  fbPut(`syncControl/${deviceId}`, { logSync: true, fps: 1 });
+  // Ask the agent to stream screen frames (rrweb windows) + logs through the
+  // backend for as long as this viewer is open.
+  fbPut(`syncControl/${deviceId}`, { screenSync: true, logSync: true, fps: 1 });
 
   const container = document.getElementById('modal-container')!;
   container.innerHTML = `<div class="modal-overlay" id="modal-overlay">
@@ -1586,45 +1585,24 @@ function showScreenModal(deviceId: string): void {
     syncTransport();
   });
 
-  // ── WebRTC peer path: screen frames arrive directly over a DataChannel, so
-  // the heavy payload never touches the database. The RTDB screens/ fallback is
-  // armed only if the peer can't connect within a few seconds, and is torn down
-  // the moment the peer connects — so a healthy P2P session never hits the DB. ──
-  const reasm = new Reassembler();
-  let rtcPc: RTCPeerConnection | null = null;
-  let answerSource: EventSource | null = null;
-  let rtcConnected = false;
-  let fallbackSource: EventSource | null = null;
-  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  // ── Screen frames (rrweb windows) stream through the backend: the agent writes
+  // screens/{id} on each flush and we re-read on every change. ──
+  let screenSource: FbSub | null = null;
 
-  function applyFrame(data: any): void {
-    data.kind = 'rrweb'; // events inside the frame are already a parsed array
-    data._src = 'rtc';
-    latestData = data;
-    requestRender(); // ingest always; playhead only follows when live
-    const parts = [`${data.width}×${data.height}`, data.url || ''];
-    if (data.title) parts.push(data.title);
-    parts.push(new Date(data.timestamp).toLocaleTimeString());
-    infoEl.textContent = parts.join(' · ');
-  }
-
-  // RTDB fallback: ask the agent to write screens/ and stream them over SSE.
-  // Only engaged when WebRTC can't be established.
-  function startRtdbFallback(): void {
-    if (rtcConnected || fallbackSource) return;
-    fbPut(`syncControl/${deviceId}`, { screenSync: true, logSync: true, fps: 1 });
-    fallbackSource = fbListen(`screens/${deviceId}`, async () => {
+  function startScreenStream(): void {
+    if (screenSource) return;
+    screenSource = fbListen(`screens/${deviceId}`, async () => {
       const data = await fbGet<any>(`screens/${deviceId}`);
       if (!data) return;
 
       if (data.kind === 'rrweb') {
-        // Events arrive as a JSON string (RTDB can't store the deep tree).
-        // Older agents may still send an array — handle both.
+        // Events arrive as a JSON string (the tree store can't hold the deep
+        // event array). Older agents may still send an array — handle both.
         if (typeof data.events === 'string') {
           try { data.events = JSON.parse(data.events); } catch { return; }
         }
         if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
-        data._src = 'rtdb';
+        data._src = 'backend';
         latestData = data;
         // Ingest into the continuous Replayer even while the user is stepping a
         // frozen view; ingest() leaves the playhead put unless live.
@@ -1641,79 +1619,16 @@ function showScreenModal(deviceId: string): void {
         infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
       }
     });
-    state.screenViewers.set(deviceId, fallbackSource);
+    state.screenViewers.set(deviceId, screenSource);
   }
-
-  // Peer is up: stop the database screen path entirely — close the SSE and tell
-  // the agent it no longer needs to write screens/ (keep the light log stream).
-  function onRtcConnected(): void {
-    if (rtcConnected) return;
-    rtcConnected = true;
-    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-    if (fallbackSource) { fallbackSource.close(); fallbackSource = null; state.screenViewers.delete(deviceId); }
-    fbPut(`syncControl/${deviceId}`, { logSync: true, fps: 1 });
-  }
-
-  async function startWebRtc(): Promise<void> {
-    try {
-      const pc = new RTCPeerConnection(await getRtcConfig());
-      rtcPc = pc;
-      const session = Math.random().toString(36).slice(2);
-      const ch = pc.createDataChannel('screen');
-      ch.onopen = onRtcConnected;
-      // The agent streams a 'full' window per checkout, then 'delta' frames with
-      // only new events. Rebuild the running window locally so renderRrweb still
-      // gets a complete event array — the wire just carries deltas.
-      let rtcEvents: any[] = [];
-      let rtcBufferId: any = null;
-      let rtcMeta: any = {};
-      ch.onmessage = (ev) => {
-        let msg: any;
-        try { msg = JSON.parse(ev.data); } catch { return; }
-        const done = reasm.push(msg);
-        if (!done) return;
-        let frame: any;
-        try { frame = JSON.parse(done.payload); } catch { return; }
-        if (done.kind === 'full') {
-          rtcBufferId = frame.bufferId;
-          rtcEvents = sanitizeEvents(frame.events || []);
-          rtcMeta = { url: frame.url, title: frame.title, width: frame.width, height: frame.height };
-        } else if (done.kind === 'delta') {
-          if (frame.bufferId !== rtcBufferId) return; // missed the base window; wait for next full
-          rtcEvents = rtcEvents.concat(sanitizeEvents(frame.events || []));
-        } else {
-          return;
-        }
-        applyFrame({ bufferId: rtcBufferId, events: rtcEvents, ...rtcMeta, timestamp: frame.timestamp });
-      };
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await waitIceComplete(pc);
-      await fbPut(`rtc/${deviceId}/offer`, { sdp: pc.localDescription!.sdp, type: 'offer', session });
-      answerSource = fbListen(`rtc/${deviceId}/answer`, async () => {
-        const ans = await fbGet<any>(`rtc/${deviceId}/answer`);
-        if (!ans || ans.session !== session || pc.currentRemoteDescription) return;
-        try { await pc.setRemoteDescription({ type: 'answer', sdp: ans.sdp }); } catch {}
-      });
-    } catch { startRtdbFallback(); }
-  }
-  startWebRtc();
-  // Show a picture fast: on mobile/symmetric-NAT the non-trickle WebRTC handshake
-  // usually can't complete, so start the DB stream quickly and let WebRTC upgrade
-  // to P2P in the background if it ever connects (onRtcConnected drops the DB path).
-  fallbackTimer = setTimeout(() => { if (!rtcConnected) startRtdbFallback(); }, 4000);
+  startScreenStream();
 
   const cleanup = () => {
-    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-    if (fallbackSource) { fallbackSource.close(); fallbackSource = null; }
+    if (screenSource) { screenSource.close(); screenSource = null; }
     logSource.close();
     storageSource.close();
     networkSource.close();
     window.removeEventListener('resize', onResizeFit);
-    if (answerSource) answerSource.close();
-    if (rtcPc) { try { rtcPc.close(); } catch {} rtcPc = null; }
-    fbDelete(`rtc/${deviceId}/offer`);
-    fbDelete(`rtc/${deviceId}/answer`);
     stopRaf();
     if (replayer) { try { replayer.destroy(); } catch {} replayer = null; }
     state.screenViewers.delete(deviceId);
@@ -2078,7 +1993,7 @@ const STAGE_DEFS = [
   { id: 's1', name: '新用户完整流程', amount: '$0.50', desc: '注销→登录→onboarding→提现' },
 ];
 
-let stageProgressSource: EventSource | null = null;
+let stageProgressSource: FbSub | null = null;
 
 function renderStages(): void {
   const el = document.getElementById('stage-list')!;

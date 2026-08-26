@@ -1,65 +1,51 @@
-export const DB_URL = 'https://autobot-remote-default-rtdb.firebaseio.com';
+// Realtime facade. Everything in the app talks to the backend through these fb*
+// functions; the actual transport is a pluggable Backend (firebase / relay /
+// cloudbase) chosen by the injection config — see ./backend. The fb* names are
+// kept for history (this layer used to be Firebase RTDB); callers don't move.
+//
+// This layer owns resilience: ops never throw into UI code (get -> null, writes
+// swallow + warn), with one retry on a transient network error.
 
-export async function fbPut(path: string, data: any): Promise<void> {
-  await fetch(`${DB_URL}/${path}.json`, { method: 'PUT', body: JSON.stringify(data) });
+import { selectBackend } from './backend';
+import type { Backend, FbSub } from './backend/types';
+
+export type { FbSub } from './backend/types';
+
+let active: Backend | null = null;
+function be(): Backend { return (active ??= selectBackend()); }
+
+function isNetErr(e: any): boolean {
+  return /network request error|failed to fetch|network error/i.test((e && e.message) || '');
 }
-
-export async function fbPatch(path: string, data: any): Promise<void> {
-  await fetch(`${DB_URL}/${path}.json`, { method: 'PATCH', body: JSON.stringify(data) });
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
+  catch (e) { if (isNetErr(e)) return await fn(); throw e; }
+}
+function warn(where: string, e: any) {
+  try { console.warn('[fb]', where, (e && e.message) || e); } catch {}
 }
 
 export async function fbGet<T>(path: string): Promise<T | null> {
-  try {
-    const resp = await fetch(`${DB_URL}/${path}.json`);
-    if (!resp.ok) return null;
-    return await resp.json();
-  } catch { return null; }
+  try { return await withRetry(() => be().get<T>(path)); } catch { return null; }
 }
-
+export async function fbPut(path: string, data: any): Promise<void> {
+  try { await withRetry(() => be().put(path, data)); } catch (e) { warn('fbPut ' + path, e); }
+}
+export async function fbPatch(path: string, data: any): Promise<void> {
+  try { await withRetry(() => be().patch(path, data)); } catch (e) { warn('fbPatch ' + path, e); }
+}
 export async function fbDelete(path: string): Promise<void> {
-  await fetch(`${DB_URL}/${path}.json`, { method: 'DELETE' });
+  try { await withRetry(() => be().delete(path)); } catch (e) { warn('fbDelete ' + path, e); }
+}
+export function fbListen(path: string, onEvent: (data: any) => void): FbSub {
+  try { return be().listen(path, onEvent); }
+  catch (e) { warn('fbListen ' + path, e); return { close() {} }; }
 }
 
-export function fbListen(path: string, onEvent: (data: any) => void): EventSource {
-  let source = createSource();
-  let lastEventTime = Date.now();
-  let healthCheck: ReturnType<typeof setInterval> | null = null;
-
-  function createSource(): EventSource {
-    const s = new EventSource(`${DB_URL}/${path}.json`);
-    s.addEventListener('put', (e: MessageEvent) => {
-      lastEventTime = Date.now();
-      try { onEvent(JSON.parse(e.data)); } catch {}
-    });
-    s.addEventListener('patch', (e: MessageEvent) => {
-      lastEventTime = Date.now();
-      try { onEvent(JSON.parse(e.data)); } catch {}
-    });
-    s.addEventListener('keep-alive', () => { lastEventTime = Date.now(); });
-    s.onerror = () => {
-      // EventSource auto-reconnects on error, just track the time
-      lastEventTime = Date.now();
-    };
-    return s;
-  }
-
-  // Check every 60s — if no event received in 90s, force reconnect
-  healthCheck = setInterval(() => {
-    if (Date.now() - lastEventTime > 90000) {
-      source.close();
-      source = createSource();
-      lastEventTime = Date.now();
-    }
-  }, 60000);
-
-  // Override close to also clear the health check
-  const origClose = source.close.bind(source);
-  source.close = () => {
-    if (healthCheck) { clearInterval(healthCheck); healthCheck = null; }
-    origClose();
-  };
-
-  return source;
+// networksync skips the agent's own backend traffic so it isn't captured as if it
+// were the app's network activity.
+export function isOwnTraffic(url: string): boolean {
+  try { return be().ownsUrl(url); } catch { return false; }
 }
 
 export interface DeviceInfo {

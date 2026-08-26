@@ -44,6 +44,10 @@ jobs:
 
       - run: cp node_modules/rrweb/dist/rrweb.umd.min.cjs dist/rrweb.umd.min.cjs
 
+      # CloudBase Web SDK, self-hosted on the Pages origin so the injected agent can
+      # fetch + inline-inject it under the PWA's strict CSP (same pattern as rrweb).
+      - run: curl -fsSL https://static.cloudbase.net/cloudbase-js-sdk/2.28.6/cloudbase.full.js -o dist/cloudbase.full.js
+
       - run: cp -r tests dist/tests
 
       - uses: actions/configure-pages@v5

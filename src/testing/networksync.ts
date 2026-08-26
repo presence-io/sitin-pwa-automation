@@ -4,7 +4,7 @@
 // push that buffer to Firebase only while a dashboard has sync enabled for this
 // device. Mirrors logsync.ts / storagesync.ts.
 
-import { fbPut, fbDelete, DB_URL } from '../shared/firebase';
+import { fbPut, fbDelete, isOwnTraffic } from '../shared/firebase';
 import { getDeviceId } from './remote';
 
 export interface NetEntry {
@@ -31,11 +31,8 @@ let installed = false;
 
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
-// Skip our own Firebase traffic — otherwise each flush (a fetch) would record
-// itself and self-feed forever.
-function isOwnTraffic(url: string): boolean {
-  return url.startsWith(DB_URL);
-}
+// Skip our own backend traffic — otherwise each flush (a fetch/xhr) would record
+// itself and self-feed forever. The active backend knows which hosts are its own.
 
 function clip(url: string): string {
   return url.length > MAX_URL_LEN ? url.slice(0, MAX_URL_LEN) + '…' : url;
