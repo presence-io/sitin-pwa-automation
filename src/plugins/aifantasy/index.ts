@@ -144,12 +144,13 @@ function mountPanel(host: PanelHost): void {
 }
 
 const aifantasyPlugin: ProjectPlugin = {
-  id: 'aifantasy',
+  // Project key exactly as configured in the injection (script[data-project] /
+  // localStorage autobot_project) — the whole system (Firebase suites/{id},
+  // dashboard) uses 'gracechat'. The target app is aifantasy, but the historical
+  // project key stays 'gracechat' so plugin selection actually matches; renaming
+  // the key would need reconfiguring the injection + migrating Firebase.
+  id: 'gracechat',
   panelTitle: 'AutoBot v4',
-  // Legacy Firebase suites key: existing suites live under suites/gracechat, so
-  // keep reading/writing there to avoid orphaning stored data (the plugin id is
-  // 'aifantasy' but storage stays 'gracechat').
-  firebaseProject: 'gracechat',
   stages: [
     { id: 's1', name: '新用户完整流程', amount: '$0.50', suiteFile: 'stage1.json' },
   ],
