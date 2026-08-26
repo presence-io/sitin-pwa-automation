@@ -102,9 +102,10 @@ function listenForCommands(): void {
   // whole collection and dispatch pending commands addressed to us exactly once —
   // dedup by id, since a command's status only flips to 'running' once we start it
   // and the watch may fire several times before that write propagates.
-  commandsSub = fbListen('commands', async () => {
+  commandsSub = fbListen('commands', async (pushed) => {
     setConn('online');
-    const data = await fbGet<Record<string, RemoteCommand>>('commands');
+    const data: Record<string, RemoteCommand> | null =
+      pushed !== undefined ? pushed : await fbGet<Record<string, RemoteCommand>>('commands');
     if (!data) return;
     for (const cmd of Object.values(data)) {
       if (cmd && cmd.status === 'pending' && isCommandForMe(cmd) && !dispatchedCommands.has(cmd.id)) {

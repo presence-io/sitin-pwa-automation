@@ -116,9 +116,9 @@ export function listenSyncControl(): void {
   const deviceId = getDeviceId();
   if (syncSource) syncSource.close();
 
-  syncSource = fbListen(`syncControl/${deviceId}`, async () => {
+  syncSource = fbListen(`syncControl/${deviceId}`, async (pushed) => {
     try {
-      const data = await fbGet<any>(`syncControl/${deviceId}`);
+      const data = pushed !== undefined ? pushed : await fbGet<any>(`syncControl/${deviceId}`);
       // Logs + storage + network stream whenever a viewer is attached (screen
       // sync or logs alone).
       if (data?.screenSync || data?.logSync) {

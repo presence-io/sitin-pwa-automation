@@ -383,8 +383,8 @@ async function abortRun(): Promise<void> {
 
 function startResultsListener(cmdId: string): void {
   if (resultsSource) resultsSource.close();
-  resultsSource = fbListen(`results/${cmdId}`, async () => {
-    const data = await fbGet<Record<string, CommandProgress>>(`results/${cmdId}`);
+  resultsSource = fbListen(`results/${cmdId}`, async (pushed) => {
+    const data = pushed !== undefined ? pushed : await fbGet<Record<string, CommandProgress>>(`results/${cmdId}`);
     if (data) {
       state.results = new Map(Object.entries(data));
       renderResults();
@@ -1056,8 +1056,8 @@ function showScreenModal(deviceId: string): void {
     logEntries = []; logSeq = -1; renderLogs();
   });
 
-  const logSource = fbListen(`logs/${deviceId}`, async () => {
-    const data = await fbGet<any>(`logs/${deviceId}`);
+  const logSource = fbListen(`logs/${deviceId}`, async (pushed) => {
+    const data = pushed !== undefined ? pushed : await fbGet<any>(`logs/${deviceId}`);
     if (!data || !Array.isArray(data.entries)) return;
     if (typeof data.seq === 'number' && data.seq === logSeq) return;
     logSeq = typeof data.seq === 'number' ? data.seq : logSeq;
@@ -1110,8 +1110,8 @@ function showScreenModal(deviceId: string): void {
   stTabSession.addEventListener('click', () => selectTab('session'));
   stSearchEl.addEventListener('input', renderStorage);
 
-  const storageSource = fbListen(`storage/${deviceId}`, async () => {
-    const data = await fbGet<any>(`storage/${deviceId}`);
+  const storageSource = fbListen(`storage/${deviceId}`, async (pushed) => {
+    const data = pushed !== undefined ? pushed : await fbGet<any>(`storage/${deviceId}`);
     if (!data) return;
     try { storeData.local = JSON.parse(data.local || '[]'); } catch { storeData.local = []; }
     try { storeData.session = JSON.parse(data.session || '[]'); } catch { storeData.session = []; }
@@ -1176,8 +1176,8 @@ function showScreenModal(deviceId: string): void {
   nwSearchEl.addEventListener('input', renderNetwork);
   nwClearEl.addEventListener('click', () => { netEntries = []; renderNetwork(); });
 
-  const networkSource = fbListen(`network/${deviceId}`, async () => {
-    const data = await fbGet<any>(`network/${deviceId}`);
+  const networkSource = fbListen(`network/${deviceId}`, async (pushed) => {
+    const data = pushed !== undefined ? pushed : await fbGet<any>(`network/${deviceId}`);
     if (!data || typeof data.seq !== 'number') return;
     if (data.seq === netSeq) return;
     netSeq = data.seq;
@@ -1586,13 +1586,14 @@ function showScreenModal(deviceId: string): void {
   });
 
   // ── Screen frames (rrweb windows) stream through the backend: the agent writes
-  // screens/{id} on each flush and we re-read on every change. ──
+  // screens/{id} on each flush and the listen delivers the frame inline (no
+  // re-read — that would flood the connection pool behind the SSE). ──
   let screenSource: FbSub | null = null;
 
   function startScreenStream(): void {
     if (screenSource) return;
-    screenSource = fbListen(`screens/${deviceId}`, async () => {
-      const data = await fbGet<any>(`screens/${deviceId}`);
+    screenSource = fbListen(`screens/${deviceId}`, async (pushed) => {
+      const data = pushed !== undefined ? pushed : await fbGet<any>(`screens/${deviceId}`);
       if (!data) return;
 
       if (data.kind === 'rrweb') {

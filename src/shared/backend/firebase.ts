@@ -35,15 +35,49 @@ export function makeFirebaseBackend(cfg: { databaseURL?: string }): Backend {
       if (!resp.ok) throw new Error(`firebase delete ${resp.status}`);
     },
     listen(path: string, onEvent: (data: any) => void): FbSub {
-      // Callers ignore the payload and re-read via fbGet, so any put/patch just
-      // pings onEvent(). EventSource fires an initial 'put' with the current
-      // value on connect — that first ping primes the reader.
+      // RTDB's SSE already carries the data (put/patch events each include the
+      // changed value at a relative path). We keep a local mirror of the watched
+      // subtree and hand callers the current value — they must NOT re-read.
+      // Re-fetching on every event (esp. large screen frames) floods the ~6
+      // per-host connections behind the long-lived SSE and stalls into a pile of
+      // pending requests. EventSource fires an initial 'put' with the full
+      // snapshot on connect, so the first emit already carries real data.
       let es: EventSource | null = null;
+      let mirror: any = null;
+      const setAt = (rel: string, val: any) => {
+        const segs = (rel || '').split('/').filter(Boolean);
+        if (!segs.length) { mirror = val; return; }
+        if (mirror === null || typeof mirror !== 'object') mirror = {};
+        let node = mirror;
+        for (let i = 0; i < segs.length - 1; i++) {
+          const k = segs[i];
+          if (node[k] === null || typeof node[k] !== 'object') node[k] = {};
+          node = node[k];
+        }
+        const last = segs[segs.length - 1];
+        if (val === null || val === undefined) delete node[last]; else node[last] = val;
+      };
+      const emit = () => {
+        const snap = (mirror !== null && typeof mirror === 'object')
+          ? (Array.isArray(mirror) ? mirror.slice() : { ...mirror })
+          : mirror;
+        try { onEvent(snap); } catch {}
+      };
       try {
         es = new EventSource(url(path));
-        const ping = () => { try { onEvent(undefined); } catch {} };
-        es.addEventListener('put', ping);
-        es.addEventListener('patch', ping);
+        es.addEventListener('put', (ev: any) => {
+          try { const m = JSON.parse(ev.data); setAt(m.path, m.data); } catch {}
+          emit();
+        });
+        es.addEventListener('patch', (ev: any) => {
+          try {
+            const m = JSON.parse(ev.data);
+            const d = m.data;
+            if (d && typeof d === 'object')
+              for (const k in d) setAt(m.path === '/' ? k : m.path + '/' + k, d[k]);
+          } catch {}
+          emit();
+        });
       } catch (e) { console.warn('[fb] firebase listen', path, e); }
       return { close() { try { es && es.close(); } catch {} } };
     },
