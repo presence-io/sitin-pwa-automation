@@ -3,6 +3,7 @@ import {
   type FbSub, type DeviceInfo, type RemoteCommand, type CommandProgress,
 } from '../shared/firebase';
 import { loadRrweb } from '../shared/rrweb-loader';
+import { unpackString } from '../shared/compress';
 
 // Minimal rrweb replay styles (the base Replayer renders into an iframe; these
 // only cover the wrapper + cursor so we don't need the full rrweb stylesheet).
@@ -1639,13 +1640,14 @@ function showScreenModal(deviceId: string): void {
     syncTransport();
   });
 
-  function handleScreen(data: any): void {
+  async function handleScreen(data: any): Promise<void> {
     if (!data) return;
     if (data.kind === 'rrweb') {
-      // Events arrive as a JSON string (the tree store can't hold the deep event
-      // array). Older agents may still send an array — handle both.
+      // Events arrive as a gzip'd (or, on old agents, plain) JSON string — the
+      // tree store can't hold the deep event array. Un-gzip then parse; older
+      // agents may still send a raw array — handle both.
       if (typeof data.events === 'string') {
-        try { data.events = JSON.parse(data.events); } catch { return; }
+        try { data.events = JSON.parse(await unpackString(data.events)); } catch { return; }
       }
       if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
       data._src = 'backend';
@@ -1680,7 +1682,7 @@ function showScreenModal(deviceId: string): void {
     if (m.logs !== lastLogs)       { lastLogs = m.logs;       if (m.logs)    handleLogs(m.logs); }
     if (m.storage !== lastStorage) { lastStorage = m.storage; if (m.storage) handleStorage(m.storage); }
     if (m.network !== lastNetwork) { lastNetwork = m.network; if (m.network) handleNetwork(m.network); }
-    if (m.screen !== lastScreen)   { lastScreen = m.screen;   if (m.screen)  handleScreen(m.screen); }
+    if (m.screen !== lastScreen)   { lastScreen = m.screen;   if (m.screen)  await handleScreen(m.screen); }
   });
   state.screenViewers.set(deviceId, monSource);
 

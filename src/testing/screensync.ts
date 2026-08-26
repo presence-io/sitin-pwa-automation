@@ -1,6 +1,7 @@
 import { log, warn } from '../core/helpers';
 import { loadRrweb } from '../shared/rrweb-loader';
 import { fbPut, fbGet, fbDelete, fbListen, type FbSub } from '../shared/firebase';
+import { packString } from '../shared/compress';
 import { getDeviceId } from './remote';
 import { startLogStream, stopLogStream } from './logsync';
 import { startStorageStream, stopStorageStream } from './storagesync';
@@ -83,13 +84,15 @@ async function flush(): Promise<void> {
   dirty = false;
 
   // Write the full self-contained window (events serialized as a string to dodge
-  // the 32-level depth / forbidden-key limits that 400 the write). A single
-  // last-write-wins key can't carry deltas, so it stays full each flush.
+  // the 32-level depth / forbidden-key limits that 400 the write, then gzip'd to
+  // cut the upload/SSE payload ~8x). A single last-write-wins key can't carry
+  // deltas, so it stays full each flush.
   const deviceId = getDeviceId();
+  const events = await packString(JSON.stringify(buffer));
   await fbPut(`screens/${deviceId}/screen`, {
     kind: 'rrweb',
     bufferId,
-    events: JSON.stringify(buffer),
+    events,
     url: location.pathname + location.search,
     title: document.title,
     width: window.innerWidth,
