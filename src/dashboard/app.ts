@@ -1211,8 +1211,10 @@ function showScreenModal(deviceId: string): void {
   let netEntries: Array<{
     id: number; type: string; method: string; url: string;
     status: number; ok: boolean; ts: number; durMs: number; size: number; err: string;
+    reqHeaders?: string; reqBody?: string; resHeaders?: string; resBody?: string;
   }> = [];
   let netSeq = -1;
+  const netOpen = new Set<number>(); // ids of rows expanded to show headers/body
 
   function statusColor(e: { status: number; ok: boolean; err: string }): string {
     if (e.err) return 'var(--danger)';
@@ -1230,6 +1232,19 @@ function showScreenModal(deviceId: string): void {
     return (n / 1024 / 1024).toFixed(1) + 'M';
   }
 
+  function detailBlock(label: string, val: string | undefined): string {
+    if (!val) return '';
+    return `<div style="color:var(--fg-muted);font-weight:600;margin:7px 0 2px">${label}</div>` +
+      `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;color:var(--fg);max-height:180px;overflow:auto;background:#fff;border:1px solid var(--neutral-muted);border-radius:4px;padding:5px 7px">${escHtml(val)}</pre>`;
+  }
+
+  function netDetailRow(e: typeof netEntries[number]): string {
+    const inner = detailBlock('请求头', e.reqHeaders) + detailBlock('请求体', e.reqBody) +
+      detailBlock('响应头', e.resHeaders) + detailBlock('响应体', e.resBody);
+    const content = inner || '<div style="color:var(--fg-muted);padding:2px">无详情（开启屏幕流后新的请求才会记录头/体）</div>';
+    return `<tr class="nw-detail"><td colspan="6" style="padding:2px 10px 10px 22px;background:var(--bg-subtle);font-size:11px">${content}</td></tr>`;
+  }
+
   function renderNetwork(): void {
     const q = nwSearchEl.value.trim().toLowerCase();
     let shown = 0;
@@ -1242,10 +1257,12 @@ function showScreenModal(deviceId: string): void {
       const statusTxt = e.err ? '✕' : (e.status || '…');
       const time = new Date(e.ts).toLocaleTimeString();
       const size = fmtSize(e.size);
+      const open = netOpen.has(e.id);
+      const caret = `<span style="color:var(--fg-subtle);display:inline-block;width:10px">${open ? '▾' : '▸'}</span> `;
       const urlCell = highlight(e.url, q) + (e.err ? ` <span style="color:var(--danger)">· ${escHtml(e.err)}</span>` : '');
       body.push(
-        `<tr>` +
-        `<td style="${TD};color:var(--accent-strong);font-weight:600;white-space:nowrap">${escHtml(e.method)}</td>` +
+        `<tr data-nid="${e.id}" style="cursor:pointer">` +
+        `<td style="${TD};color:var(--accent-strong);font-weight:600;white-space:nowrap">${caret}${escHtml(e.method)}</td>` +
         `<td style="${TD};color:${color};font-weight:600;white-space:nowrap">${escHtml(String(statusTxt))}</td>` +
         `<td style="${TD};color:var(--fg);word-break:break-all">${urlCell}</td>` +
         `<td style="${TD};color:var(--fg-muted);white-space:nowrap;text-align:right">${e.durMs}ms</td>` +
@@ -1253,6 +1270,7 @@ function showScreenModal(deviceId: string): void {
         `<td style="${TD};color:var(--fg-muted);white-space:nowrap">${escHtml(time)}</td>` +
         `</tr>`,
       );
+      if (open) body.push(netDetailRow(e));
     }
     networkListEl.innerHTML = body.length
       ? `<table style="width:100%;border-collapse:collapse">` +
@@ -1264,14 +1282,33 @@ function showScreenModal(deviceId: string): void {
     nwCountEl.textContent = q ? `${shown}/${netEntries.length}` : `${netEntries.length}`;
   }
 
-  nwSearchEl.addEventListener('input', renderNetwork);
-  nwClearEl.addEventListener('click', () => { netEntries = []; renderNetwork(); });
+  // Delegated so it survives the innerHTML rebuild on every flush. A click on a
+  // data row toggles its detail row (open state kept in netOpen across renders).
+  networkListEl.addEventListener('click', (ev) => {
+    const tr = (ev.target as HTMLElement).closest('tr[data-nid]') as HTMLElement | null;
+    if (!tr) return;
+    const nid = parseInt(tr.dataset.nid || '', 10);
+    if (Number.isNaN(nid)) return;
+    if (netOpen.has(nid)) netOpen.delete(nid); else netOpen.add(nid);
+    renderNetwork();
+  });
 
-  function handleNetwork(data: any): void {
+  nwSearchEl.addEventListener('input', renderNetwork);
+  nwClearEl.addEventListener('click', () => { netEntries = []; netOpen.clear(); renderNetwork(); });
+
+  async function handleNetwork(data: any): Promise<void> {
     if (!data || typeof data.seq !== 'number') return;
     if (data.seq === netSeq) return;
     netSeq = data.seq;
-    netEntries = Array.isArray(data.entries) ? data.entries : [];
+    const mySeq = data.seq;
+    let entries = data.entries;
+    // New agents gzip the entries array into a single string; old agents send a
+    // bare array. Unpack the former, pass the latter through.
+    if (typeof entries === 'string') {
+      try { entries = JSON.parse(await unpackString(entries)); } catch { entries = []; }
+    }
+    if (mySeq !== netSeq) return; // a newer flush landed while we were unpacking
+    netEntries = Array.isArray(entries) ? entries : [];
     renderNetwork();
   }
 
