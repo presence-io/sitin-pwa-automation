@@ -190,8 +190,7 @@ async function deleteDevice(deviceId: string): Promise<void> {
 
   await Promise.all([
     fbDelete(`devices/${deviceId}`),
-    fbDelete(`screens/${deviceId}`),
-    fbDelete(`logs/${deviceId}`),
+    fbDelete(`mon/${deviceId}`),
     fbDelete(`syncControl/${deviceId}`),
   ]);
 }
@@ -1067,14 +1066,13 @@ function showScreenModal(deviceId: string): void {
     logEntries = []; logSeq = -1; renderLogs();
   });
 
-  const logSource = fbListen(`logs/${deviceId}`, async (pushed) => {
-    const data = pushed !== undefined ? pushed : await fbGet<any>(`logs/${deviceId}`);
+  function handleLogs(data: any): void {
     if (!data || !Array.isArray(data.entries)) return;
     if (typeof data.seq === 'number' && data.seq === logSeq) return;
     logSeq = typeof data.seq === 'number' ? data.seq : logSeq;
     logEntries = data.entries;
     renderLogs();
-  });
+  }
 
   // ── Storage viewer (mirrors logs): local/session pushed to storage/{deviceId}
   // by the agent as JSON-encoded [key,value][] strings. ──
@@ -1121,14 +1119,13 @@ function showScreenModal(deviceId: string): void {
   stTabSession.addEventListener('click', () => selectTab('session'));
   stSearchEl.addEventListener('input', renderStorage);
 
-  const storageSource = fbListen(`storage/${deviceId}`, async (pushed) => {
-    const data = pushed !== undefined ? pushed : await fbGet<any>(`storage/${deviceId}`);
+  function handleStorage(data: any): void {
     if (!data) return;
     try { storeData.local = JSON.parse(data.local || '[]'); } catch { storeData.local = []; }
     try { storeData.session = JSON.parse(data.session || '[]'); } catch { storeData.session = []; }
     storeData.origin = data.origin || '';
     renderStorage();
-  });
+  }
 
   // ── Network viewer (mirrors logs): fetch/XHR metadata pushed to
   // network/{deviceId} by the agent as {entries, seq}. ──
@@ -1187,14 +1184,13 @@ function showScreenModal(deviceId: string): void {
   nwSearchEl.addEventListener('input', renderNetwork);
   nwClearEl.addEventListener('click', () => { netEntries = []; renderNetwork(); });
 
-  const networkSource = fbListen(`network/${deviceId}`, async (pushed) => {
-    const data = pushed !== undefined ? pushed : await fbGet<any>(`network/${deviceId}`);
+  function handleNetwork(data: any): void {
     if (!data || typeof data.seq !== 'number') return;
     if (data.seq === netSeq) return;
     netSeq = data.seq;
     netEntries = Array.isArray(data.entries) ? data.entries : [];
     renderNetwork();
-  });
+  }
 
   let replayer: import('rrweb').Replayer | null = null;
   let curBufferId: number | null = null;
@@ -1596,65 +1592,64 @@ function showScreenModal(deviceId: string): void {
     syncTransport();
   });
 
-  // ── Screen frames (rrweb windows) stream through the backend: the agent writes
-  // screens/{id} on each flush and the listen delivers the frame inline (no
-  // re-read — that would flood the connection pool behind the SSE). ──
-  let screenSource: FbSub | null = null;
-
-  function startScreenStream(): void {
-    if (screenSource) return;
-    screenSource = fbListen(`screens/${deviceId}`, async (pushed) => {
-      const data = pushed !== undefined ? pushed : await fbGet<any>(`screens/${deviceId}`);
-      if (!data) return;
-
-      if (data.kind === 'rrweb') {
-        // Events arrive as a JSON string (the tree store can't hold the deep
-        // event array). Older agents may still send an array — handle both.
-        if (typeof data.events === 'string') {
-          try { data.events = JSON.parse(data.events); } catch { return; }
-        }
-        if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
-        data._src = 'backend';
-        latestData = data;
-        // Ingest into the continuous Replayer even while the user is stepping a
-        // frozen view; ingest() leaves the playhead put unless live.
-        requestRender();
-      } else if (data.image) {
-        renderLegacyImage(data);
+  function handleScreen(data: any): void {
+    if (!data) return;
+    if (data.kind === 'rrweb') {
+      // Events arrive as a JSON string (the tree store can't hold the deep event
+      // array). Older agents may still send an array — handle both.
+      if (typeof data.events === 'string') {
+        try { data.events = JSON.parse(data.events); } catch { return; }
       }
+      if (Array.isArray(data.events)) data.events = sanitizeEvents(data.events);
+      data._src = 'backend';
+      latestData = data;
+      // Ingest into the continuous Replayer even while the user is stepping a
+      // frozen view; ingest() leaves the playhead put unless live.
+      requestRender();
+    } else if (data.image) {
+      renderLegacyImage(data);
+    }
 
-      const parts = [`${data.width}×${data.height}`, data.url || ''];
-      if (data.title) parts.push(data.title);
-      parts.push(new Date(data.timestamp).toLocaleTimeString());
-      infoEl.textContent = parts.join(' · ');
-      if (data.kind !== 'rrweb' && !data.image && data.visibleText) {
-        infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
-      }
-    });
-    state.screenViewers.set(deviceId, screenSource);
-  }
-  function stopScreenStream(): void {
-    if (screenSource) { screenSource.close(); screenSource = null; }
-    state.screenViewers.delete(deviceId);
+    const parts = [`${data.width}×${data.height}`, data.url || ''];
+    if (data.title) parts.push(data.title);
+    parts.push(new Date(data.timestamp).toLocaleTimeString());
+    infoEl.textContent = parts.join(' · ');
+    if (data.kind !== 'rrweb' && !data.image && data.visibleText) {
+      infoEl.textContent += '\n' + data.visibleText.slice(0, 150);
+    }
   }
 
-  // Screen stream is a manual toggle (default off). Flipping it tells the agent
-  // to start/stop recording via syncControl.screenSync AND attaches/detaches our
-  // listener — so no rrweb frames flow until you actually want to watch.
+  // ── One SSE per device. firebaseio is HTTP/1.1 (≤6 connections per host), so
+  // watching screens/logs/storage/network as four separate streams would eat the
+  // pool and starve a second open panel. The agent writes everything under
+  // mon/{id}/* and we watch mon/{id} once, dispatching each child to its handler.
+  // The inline mirror preserves child identity, so a screen frame only re-runs
+  // handleScreen — logs/storage/network stay untouched (ref-equal → skipped). ──
+  let lastScreen: any, lastLogs: any, lastStorage: any, lastNetwork: any;
+  const monSource = fbListen(`mon/${deviceId}`, async (pushed) => {
+    const m = (pushed !== undefined ? pushed : await fbGet<any>(`mon/${deviceId}`)) || {};
+    if (m.logs !== lastLogs)       { lastLogs = m.logs;       if (m.logs)    handleLogs(m.logs); }
+    if (m.storage !== lastStorage) { lastStorage = m.storage; if (m.storage) handleStorage(m.storage); }
+    if (m.network !== lastNetwork) { lastNetwork = m.network; if (m.network) handleNetwork(m.network); }
+    if (m.screen !== lastScreen)   { lastScreen = m.screen;   if (m.screen)  handleScreen(m.screen); }
+  });
+  state.screenViewers.set(deviceId, monSource);
+
+  // Screen stream is a manual toggle (default off): it only flips
+  // syncControl.screenSync so the agent starts/stops producing frames. The mon
+  // listener above renders them automatically whenever they arrive.
   let screenOn = false;
   const screenToggle = container.querySelector('#screen-toggle') as HTMLButtonElement;
   screenToggle.addEventListener('click', () => {
     screenOn = !screenOn;
     fbPatch(`syncControl/${deviceId}`, { screenSync: screenOn });
     if (screenOn) {
-      startScreenStream();
       screenToggle.textContent = '⏸ 关闭屏幕流';
       screenToggle.style.background = 'var(--bg-subtle)';
       screenToggle.style.color = 'var(--fg)';
       screenToggle.style.borderColor = 'var(--border)';
       infoEl.textContent = 'Connecting…';
     } else {
-      stopScreenStream();
       screenToggle.textContent = '▶ 开启屏幕流';
       screenToggle.style.background = 'var(--accent)';
       screenToggle.style.color = '#fff';
@@ -1664,10 +1659,7 @@ function showScreenModal(deviceId: string): void {
   });
 
   const cleanup = () => {
-    if (screenSource) { screenSource.close(); screenSource = null; }
-    logSource.close();
-    storageSource.close();
-    networkSource.close();
+    monSource.close();
     window.removeEventListener('resize', onResizeFit);
     stopRaf();
     if (replayer) { try { replayer.destroy(); } catch {} replayer = null; }

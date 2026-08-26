@@ -40,7 +40,7 @@ async function flush(): Promise<void> {
   lastHash = hash;
 
   const deviceId = getDeviceId();
-  await fbPut(`storage/${deviceId}`, {
+  await fbPut(`mon/${deviceId}/storage`, {
     local: localStr,
     session: sessionStr,
     origin: location.origin,
@@ -60,5 +60,5 @@ export function stopStorageStream(): void {
   if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
   lastHash = '';
   const deviceId = getDeviceId();
-  fbDelete(`storage/${deviceId}`);
+  fbDelete(`mon/${deviceId}/storage`);
 }

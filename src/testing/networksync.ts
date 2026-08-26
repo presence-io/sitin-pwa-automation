@@ -149,7 +149,7 @@ async function flush(): Promise<void> {
   if (!dirty) return;
   dirty = false;
   const deviceId = getDeviceId();
-  await fbPut(`network/${deviceId}`, {
+  await fbPut(`mon/${deviceId}/network`, {
     entries: ring.slice(-MAX_ENTRIES),
     seq,
     updatedAt: Date.now(),
@@ -167,5 +167,5 @@ export function startNetworkStream(fps = 1): void {
 export function stopNetworkStream(): void {
   if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
   const deviceId = getDeviceId();
-  fbDelete(`network/${deviceId}`);
+  fbDelete(`mon/${deviceId}/network`);
 }

@@ -107,7 +107,7 @@ async function flush(): Promise<void> {
   if (!dirty) return;
   dirty = false;
   const deviceId = getDeviceId();
-  await fbPut(`logs/${deviceId}`, {
+  await fbPut(`mon/${deviceId}/logs`, {
     entries: ring.slice(-MAX_ENTRIES),
     seq,
     updatedAt: Date.now(),
@@ -125,5 +125,5 @@ export function startLogStream(fps = 1): void {
 export function stopLogStream(): void {
   if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
   const deviceId = getDeviceId();
-  fbDelete(`logs/${deviceId}`);
+  fbDelete(`mon/${deviceId}/logs`);
 }
